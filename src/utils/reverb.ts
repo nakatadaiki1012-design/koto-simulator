@@ -21,7 +21,7 @@ export const REVERB_ENVIRONMENTS: ReverbOption[] = [
     id: 'off',
     label: '残響なし',
     labelEn: 'Dry / Off',
-    description: '直接音のみのクリアで素朴な響き',
+    description: '直接音のみのクリアで素朴な響き（弦の本来の美しさが際立ちます）',
     wetLevel: 0.0,
   },
   {
@@ -29,21 +29,21 @@ export const REVERB_ENVIRONMENTS: ReverbOption[] = [
     label: 'スタジオ',
     labelEn: 'Studio',
     description: '録音ブース・小和室のタイトで明瞭なアコースティック残響',
-    wetLevel: 0.16,
+    wetLevel: 0.08,
   },
   {
     id: 'traditional_hall',
     label: '能舞台',
     labelEn: 'Traditional Hall',
     description: '能舞台や伝統的な大和室の檜・畳が織りなす温かな木の響き',
-    wetLevel: 0.25,
+    wetLevel: 0.14,
   },
   {
     id: 'temple',
     label: '大本堂',
     labelEn: 'Temple Sanctuary',
     description: '大寺院の堂内にどこまでも広がる壮大で幻想的なロングリバーブ',
-    wetLevel: 0.34,
+    wetLevel: 0.20,
   },
 ];
 

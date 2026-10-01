@@ -48,6 +48,8 @@ class KotoSoundEngine {
   private dryGain: GainNode | null = null;
   private wetGain: GainNode | null = null;
   private reverbSendGain: GainNode | null = null;
+  private reverbHighpass: BiquadFilterNode | null = null;
+  private reverbLowpass: BiquadFilterNode | null = null;
   private convolver: ConvolverNode | null = null;
   private activeVoices: Map<number, ActiveVoice[]> = new Map();
   private volume: number = 0.85;
@@ -56,7 +58,7 @@ class KotoSoundEngine {
 
   // Timbre & Spatial settings
   private stringType: KotoStringType = 'silk';
-  private reverbEnvironment: ReverbEnvironment = 'traditional_hall';
+  private reverbEnvironment: ReverbEnvironment = 'studio';
   private activeTuning: KotoTuning = HIRAJOSHI;
   private currentTechnique: PlayingTechnique = 'normal';
   private impulseCache: Map<ReverbEnvironment, AudioBuffer> = new Map();
@@ -124,20 +126,20 @@ class KotoSoundEngine {
       this.masterGain = this.ctx.createGain();
       this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.volume, this.ctx.currentTime);
 
-      // Dynamics compressor
+      // Dynamics compressor: softened to preserve natural string attack transients and eliminate pumping
       this.compressor = this.ctx.createDynamicsCompressor();
-      this.compressor.threshold.setValueAtTime(-16, this.ctx.currentTime);
+      this.compressor.threshold.setValueAtTime(-10, this.ctx.currentTime);
       this.compressor.knee.setValueAtTime(6, this.ctx.currentTime);
-      this.compressor.ratio.setValueAtTime(3.5, this.ctx.currentTime);
-      this.compressor.attack.setValueAtTime(0.001, this.ctx.currentTime);
-      this.compressor.release.setValueAtTime(0.15, this.ctx.currentTime);
+      this.compressor.ratio.setValueAtTime(2.2, this.ctx.currentTime);
+      this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
+      this.compressor.release.setValueAtTime(0.10, this.ctx.currentTime);
 
       // Dry / Wet Routing
       const activeOpt = REVERB_ENVIRONMENTS.find((e) => e.id === this.reverbEnvironment);
-      const initialWet = activeOpt ? activeOpt.wetLevel : 0.25;
+      const initialWet = activeOpt ? activeOpt.wetLevel : 0.08;
 
       this.dryGain = this.ctx.createGain();
-      this.dryGain.gain.setValueAtTime(1.0 - initialWet * 0.35, this.ctx.currentTime);
+      this.dryGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
 
       this.wetGain = this.ctx.createGain();
       this.wetGain.gain.setValueAtTime(initialWet, this.ctx.currentTime);
@@ -148,14 +150,25 @@ class KotoSoundEngine {
       const sendVal = this.reverbEnvironment === 'off' ? 0.0 : 1.0;
       this.reverbSendGain.gain.setValueAtTime(sendVal, this.ctx.currentTime);
 
+      // Abbey Road Reverb Filter: Cut sub/bass mud (<280Hz) and harsh top sizzle (>5200Hz)
+      this.reverbHighpass = this.ctx.createBiquadFilter();
+      this.reverbHighpass.type = 'highpass';
+      this.reverbHighpass.frequency.setValueAtTime(280, this.ctx.currentTime);
+
+      this.reverbLowpass = this.ctx.createBiquadFilter();
+      this.reverbLowpass.type = 'lowpass';
+      this.reverbLowpass.frequency.setValueAtTime(5200, this.ctx.currentTime);
+
       this.loadReverbImpulse(this.reverbEnvironment);
 
       this.compressor.connect(this.dryGain);
       this.dryGain.connect(this.masterGain);
 
-      // Route through reverbSendGain to completely bypass convolver when reverb is off
+      // Route through reverbSendGain -> Highpass -> Lowpass -> Convolver -> WetGain -> Master
       this.compressor.connect(this.reverbSendGain);
-      this.reverbSendGain.connect(this.convolver);
+      this.reverbSendGain.connect(this.reverbHighpass);
+      this.reverbHighpass.connect(this.reverbLowpass);
+      this.reverbLowpass.connect(this.convolver);
       this.convolver.connect(this.wetGain);
       this.wetGain.connect(this.masterGain);
 

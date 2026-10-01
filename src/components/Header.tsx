@@ -73,7 +73,7 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   const handleReverbQuickToggle = () => {
-    const next: ReverbEnvironment = reverbEnv === 'off' ? 'traditional_hall' : 'off';
+    const next: ReverbEnvironment = reverbEnv === 'off' ? 'studio' : 'off';
     handleReverbEnvChange(next);
   };
 
