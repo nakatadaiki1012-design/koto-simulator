@@ -1,0 +1,7 @@
+{
+  "name": "箏 - Koto Simulator",
+  "description": "教育現場や音楽学習向けの十三弦・箏（平調子）Web演奏アプリケーション。本格的なWeb Audio API撥弦合成と直感的なマルチタッチ・グリッサンド対応。",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+
