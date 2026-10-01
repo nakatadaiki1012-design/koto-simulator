@@ -65,56 +65,48 @@ export function createEnvironmentImpulseResponse(
 
   switch (environment) {
     case 'studio':
-      duration = 0.75;
-      decay = 4.6;
-      dampingFactor = 0.72; // faster absorption
+      duration = 0.5;
+      decay = 5.2;
+      dampingFactor = 0.70; // faster absorption
       earlyReflectionsL = [
-        { time: 0.008, gain: 0.5 },
-        { time: 0.018, gain: 0.35 },
-        { time: 0.029, gain: 0.2 },
+        { time: 0.008, gain: 0.4 },
+        { time: 0.018, gain: 0.25 },
       ];
       earlyReflectionsR = [
-        { time: 0.011, gain: 0.48 },
-        { time: 0.022, gain: 0.32 },
-        { time: 0.034, gain: 0.18 },
+        { time: 0.011, gain: 0.38 },
+        { time: 0.022, gain: 0.22 },
       ];
       break;
 
     case 'traditional_hall':
-      duration = 2.0;
-      decay = 2.3;
-      dampingFactor = 0.86;
+      duration = 1.1;
+      decay = 2.8;
+      dampingFactor = 0.82;
       earlyReflectionsL = [
-        { time: 0.013, gain: 0.65 },
-        { time: 0.026, gain: 0.45 },
-        { time: 0.042, gain: 0.32 },
-        { time: 0.065, gain: 0.22 },
+        { time: 0.013, gain: 0.5 },
+        { time: 0.026, gain: 0.35 },
+        { time: 0.042, gain: 0.22 },
       ];
       earlyReflectionsR = [
-        { time: 0.016, gain: 0.62 },
-        { time: 0.031, gain: 0.42 },
-        { time: 0.048, gain: 0.28 },
-        { time: 0.072, gain: 0.19 },
+        { time: 0.016, gain: 0.48 },
+        { time: 0.031, gain: 0.32 },
+        { time: 0.048, gain: 0.2 },
       ];
       break;
 
     case 'temple':
-      duration = 3.5;
-      decay = 1.5; // very slow decay
-      dampingFactor = 0.94; // sustained high and mid air reflection
+      duration = 1.6;
+      decay = 2.0; // sustained ambient space
+      dampingFactor = 0.90; // sustained reflection
       earlyReflectionsL = [
-        { time: 0.022, gain: 0.75 },
-        { time: 0.048, gain: 0.55 },
-        { time: 0.082, gain: 0.42 },
-        { time: 0.125, gain: 0.32 },
-        { time: 0.18, gain: 0.24 },
+        { time: 0.022, gain: 0.55 },
+        { time: 0.048, gain: 0.38 },
+        { time: 0.082, gain: 0.28 },
       ];
       earlyReflectionsR = [
-        { time: 0.028, gain: 0.72 },
-        { time: 0.054, gain: 0.52 },
-        { time: 0.092, gain: 0.38 },
-        { time: 0.142, gain: 0.28 },
-        { time: 0.21, gain: 0.2 },
+        { time: 0.028, gain: 0.52 },
+        { time: 0.054, gain: 0.35 },
+        { time: 0.092, gain: 0.25 },
       ];
       break;
   }
@@ -151,6 +143,22 @@ export function createEnvironmentImpulseResponse(
 
     left[i] += prevL * 0.45;
     right[i] += prevR * 0.45;
+  }
+
+  // Peak normalization: prevent any gain blowout or AudioContext overload
+  let maxPeak = 0;
+  for (let i = 0; i < length; i++) {
+    const aL = Math.abs(left[i]);
+    const aR = Math.abs(right[i]);
+    if (aL > maxPeak) maxPeak = aL;
+    if (aR > maxPeak) maxPeak = aR;
+  }
+  if (maxPeak > 0.001) {
+    const scale = 0.7 / maxPeak;
+    for (let i = 0; i < length; i++) {
+      left[i] *= scale;
+      right[i] *= scale;
+    }
   }
 
   return impulse;

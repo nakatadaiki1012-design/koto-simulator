@@ -189,19 +189,19 @@ export function synthesizeKotoString(
   for (let i = 0; i < totalSamples; i++) {
     const direct = tempWave[i] * normFactor;
 
-    // 245Hz Cavity Filter
+    // 245Hz Cavity Filter (stabilized)
     const bpOut = (b0 * direct + b1 * bpX1 + b2 * bpX2 - a1 * bpY1 - a2 * bpY2) / a0;
     bpX2 = bpX1;
     bpX1 = direct;
-    bpY2 = bpY1;
-    bpY1 = bpOut;
+    bpY2 = isFinite(bpOut) ? bpY1 * 0.998 : 0;
+    bpY1 = isFinite(bpOut) ? Math.max(-2, Math.min(2, bpOut)) : 0;
 
-    // 490Hz Plate Filter
+    // 490Hz Plate Filter (stabilized)
     const bpOut2 = (b0_2 * direct + b1_2 * bp2X1 + b2_2 * bp2X2 - a1_2 * bp2Y1 - a2_2 * bp2Y2) / a0_2;
     bp2X2 = bp2X1;
     bp2X1 = direct;
-    bp2Y2 = bp2Y1;
-    bp2Y1 = bpOut2;
+    bp2Y2 = isFinite(bpOut2) ? bp2Y1 * 0.998 : 0;
+    bp2Y1 = isFinite(bpOut2) ? Math.max(-2, Math.min(2, bpOut2)) : 0;
 
     // 55Hz Soundboard mechanical impulse knock on strike
     let knock = 0;
@@ -210,7 +210,7 @@ export function synthesizeKotoString(
       knock = Math.sin(kt * Math.PI * 2.2) * (1 - kt) * 0.12 * pluckHardness;
     }
 
-    let blended = direct * 0.78 + bpOut * 0.22 + bpOut2 * 0.12 + knock;
+    let blended = direct * 0.78 + (isFinite(bpOut) ? bpOut : 0) * 0.22 + (isFinite(bpOut2) ? bpOut2 : 0) * 0.12 + knock;
     if (technique === 'pizzicato') {
       blended = direct * 0.88 + bpOut * 0.12;
     } else if (technique === 'urabiki') {
@@ -219,8 +219,16 @@ export function synthesizeKotoString(
       blended = direct * 0.86 + bpOut * 0.14 + bpOut2 * 0.08;
     }
 
-    // Write to channel
-    channel[i] = blended;
+    // Write to channel with strict NaN guard and soft saturation
+    if (!isFinite(blended)) {
+      channel[i] = 0;
+    } else if (blended > 1.0) {
+      channel[i] = 1.0;
+    } else if (blended < -1.0) {
+      channel[i] = -1.0;
+    } else {
+      channel[i] = blended;
+    }
   }
 
   return buffer;

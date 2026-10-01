@@ -47,6 +47,7 @@ class KotoSoundEngine {
   private compressor: DynamicsCompressorNode | null = null;
   private dryGain: GainNode | null = null;
   private wetGain: GainNode | null = null;
+  private reverbSendGain: GainNode | null = null;
   private convolver: ConvolverNode | null = null;
   private activeVoices: Map<number, ActiveVoice[]> = new Map();
   private volume: number = 0.85;
@@ -143,12 +144,18 @@ class KotoSoundEngine {
 
       // Convolver node with selected acoustic environment
       this.convolver = this.ctx.createConvolver();
+      this.reverbSendGain = this.ctx.createGain();
+      const sendVal = this.reverbEnvironment === 'off' ? 0.0 : 1.0;
+      this.reverbSendGain.gain.setValueAtTime(sendVal, this.ctx.currentTime);
+
       this.loadReverbImpulse(this.reverbEnvironment);
 
       this.compressor.connect(this.dryGain);
       this.dryGain.connect(this.masterGain);
 
-      this.compressor.connect(this.convolver);
+      // Route through reverbSendGain to completely bypass convolver when reverb is off
+      this.compressor.connect(this.reverbSendGain);
+      this.reverbSendGain.connect(this.convolver);
       this.convolver.connect(this.wetGain);
       this.wetGain.connect(this.masterGain);
 
@@ -315,6 +322,13 @@ class KotoSoundEngine {
 
     if (env !== 'off') {
       this.loadReverbImpulse(env);
+      if (this.reverbSendGain) {
+        this.reverbSendGain.gain.setTargetAtTime(1.0, this.ctx.currentTime, 0.02);
+      }
+    } else {
+      if (this.reverbSendGain) {
+        this.reverbSendGain.gain.setTargetAtTime(0.0, this.ctx.currentTime, 0.02);
+      }
     }
 
     this.wetGain.gain.setTargetAtTime(wet, this.ctx.currentTime, 0.04);
@@ -365,7 +379,7 @@ class KotoSoundEngine {
     velocity: number = 0.85,
     overrideTechnique?: PlayingTechnique
   ): void {
-    if (!this.ctx || !this.compressor) {
+    if (!this.ctx || !this.compressor || this.ctx.state === 'closed') {
       this.init().then((success) => {
         if (success) {
           this.playString(stringId, frequency, velocity, overrideTechnique);
@@ -374,17 +388,9 @@ class KotoSoundEngine {
       return;
     }
 
-    const state = this.ctx.state as string;
-    if (state === 'suspended' || state === 'interrupted') {
-      this.ctx
-        .resume()
-        .then(() => {
-          this.dispatchPluck(stringId, frequency, velocity, overrideTechnique);
-        })
-        .catch(() => {
-          this.dispatchPluck(stringId, frequency, velocity, overrideTechnique);
-        });
-      return;
+    // Auto-resume AudioContext if suspended (e.g. mobile tab switch or screen sleep)
+    if (this.ctx.state === 'suspended' || this.ctx.state === 'interrupted') {
+      this.ctx.resume().catch(() => {});
     }
 
     this.dispatchPluck(stringId, frequency, velocity, overrideTechnique);
@@ -429,8 +435,7 @@ class KotoSoundEngine {
       const voiceToDamp = previousVoices[previousVoices.length - 1];
       try {
         voiceToDamp.gainNode.gain.cancelScheduledValues(now);
-        voiceToDamp.gainNode.gain.setValueAtTime(voiceToDamp.gainNode.gain.value, now);
-        voiceToDamp.gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.02);
+        voiceToDamp.gainNode.gain.setTargetAtTime(0.0001, now, 0.015);
       } catch {
         // Safe timing fallback
       }
@@ -447,12 +452,12 @@ class KotoSoundEngine {
     if (!buffer) {
       const duration =
         synthTech === 'pizzicato'
-          ? 0.6
+          ? 0.5
           : synthTech === 'urabiki'
-          ? 1.4
+          ? 1.2
           : synthTech === 'sukui'
-          ? 2.2
-          : 2.6;
+          ? 1.8
+          : 2.2;
       buffer = synthesizeKotoString(this.ctx, {
         sampleRate: this.ctx.sampleRate,
         frequency,
@@ -503,14 +508,13 @@ class KotoSoundEngine {
       pannerNode = this.ctx.createGain();
     }
 
-    // 4. Voice Gain Envelope
+    // 4. Voice Gain Envelope: bulletproof setTargetAtTime
     const voiceGain = this.ctx.createGain();
     const duration = buffer.duration;
 
     voiceGain.gain.setValueAtTime(0.0001, now);
-    voiceGain.gain.linearRampToValueAtTime(1.15 * vel, now + 0.002); // 2ms attack
-    voiceGain.gain.exponentialRampToValueAtTime(0.85 * vel, now + 0.07);
-    voiceGain.gain.exponentialRampToValueAtTime(0.0001, now + duration);
+    voiceGain.gain.linearRampToValueAtTime(1.15 * vel, now + 0.003); // 3ms attack
+    voiceGain.gain.setTargetAtTime(0.0001, now + 0.04, Math.max(0.25, duration * 0.38));
 
     // Connect voice chain
     sourceNode.connect(voiceGain);
@@ -520,26 +524,29 @@ class KotoSoundEngine {
     sourceNode.start(0);
     sourceNode.stop(now + duration + 0.05);
 
-    // 5. Sympathetic String Resonance (except during muted pizzicato/urabiki)
+    // 5. Sympathetic String Resonance (throttled to prevent CPU spikes)
     if (tech === 'normal' || tech === 'oshide') {
-      this.triggerSympatheticResonance(stringId, vel, now);
+      let totalActive = 0;
+      for (const list of this.activeVoices.values()) totalActive += list.length;
+      if (totalActive < 6) {
+        this.triggerSympatheticResonance(stringId, vel, now);
+      }
     }
 
-    // Polyphony Capping: prevent CPU spikes during rapid multi-finger glissandi
+    // Polyphony Capping: limit concurrent voices to 12
     let totalVoices = 0;
     for (const list of this.activeVoices.values()) {
       totalVoices += list.length;
     }
-    if (totalVoices > 18) {
+    if (totalVoices > 12) {
       for (const list of this.activeVoices.values()) {
         if (list.length > 1) {
           const oldest = list.shift();
           if (oldest) {
             try {
               oldest.gainNode.gain.cancelScheduledValues(now);
-              oldest.gainNode.gain.setValueAtTime(oldest.gainNode.gain.value, now);
-              oldest.gainNode.gain.linearRampToValueAtTime(0.0001, now + 0.015);
-              oldest.sourceNode.stop(now + 0.02);
+              oldest.gainNode.gain.setTargetAtTime(0.0001, now, 0.01);
+              oldest.sourceNode.stop(now + 0.015);
             } catch {
               // Ignore
             }
@@ -648,8 +655,8 @@ class KotoSoundEngine {
     const symLevel = 0.045 * velocity;
 
     symGain.gain.setValueAtTime(0.0001, now);
-    symGain.gain.linearRampToValueAtTime(symLevel, now + 0.07);
-    symGain.gain.exponentialRampToValueAtTime(0.0001, now + 1.8);
+    symGain.gain.linearRampToValueAtTime(symLevel, now + 0.05);
+    symGain.gain.setTargetAtTime(0.0001, now + 0.08, 0.45);
 
     symSource.connect(symGain);
     symGain.connect(this.compressor);
