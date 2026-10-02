@@ -105,6 +105,11 @@ class KotoSoundEngine {
         }
       }
 
+      // 既に音の配線が出来ている場合は作り直さない（二重配線で音が重なる・割れるのを防ぐ）
+      if (this.initialized && this.masterGain && this.compressor) {
+        return (this.ctx.state as string) === 'running';
+      }
+
       // Listen for output device change (e.g. plugging in or connecting Bluetooth earphones)
       if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
         navigator.mediaDevices.ondevicechange = async () => {
@@ -128,9 +133,9 @@ class KotoSoundEngine {
 
       // Dynamics compressor: softened to preserve natural string attack transients and eliminate pumping
       this.compressor = this.ctx.createDynamicsCompressor();
-      this.compressor.threshold.setValueAtTime(-10, this.ctx.currentTime);
+      this.compressor.threshold.setValueAtTime(-6, this.ctx.currentTime);
       this.compressor.knee.setValueAtTime(6, this.ctx.currentTime);
-      this.compressor.ratio.setValueAtTime(2.2, this.ctx.currentTime);
+      this.compressor.ratio.setValueAtTime(4, this.ctx.currentTime);
       this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
       this.compressor.release.setValueAtTime(0.10, this.ctx.currentTime);
 
@@ -235,7 +240,6 @@ class KotoSoundEngine {
         const buf = synthesizeKotoString(this.ctx, {
           sampleRate: this.ctx.sampleRate,
           frequency: s.frequency,
-          durationSeconds: 1.7,
           stringType: this.stringType,
           pluckHardness: 0.88,
           technique: 'normal',
@@ -258,11 +262,9 @@ class KotoSoundEngine {
       if (s) {
         const cacheKey = `${s.id}_${this.stringType}_${tech}_${s.frequency}`;
         if (!this.stringBufferCache.has(cacheKey)) {
-          const duration = tech === 'pizzicato' ? 0.45 : tech === 'urabiki' ? 1.1 : 1.5;
           const buf = synthesizeKotoString(this.ctx, {
             sampleRate: this.ctx.sampleRate,
             frequency: s.frequency,
-            durationSeconds: duration,
             stringType: this.stringType,
             pluckHardness: tech === 'sukui' ? 0.95 : 0.88,
             technique: tech,
@@ -463,22 +465,14 @@ class KotoSoundEngine {
     let buffer = this.stringBufferCache.get(cacheKey);
 
     if (!buffer) {
-      const duration =
-        synthTech === 'pizzicato'
-          ? 0.5
-          : synthTech === 'urabiki'
-          ? 1.2
-          : synthTech === 'sukui'
-          ? 1.8
-          : 2.2;
+      const known = this.activeTuning.strings.find((s) => s.id === stringId);
       buffer = synthesizeKotoString(this.ctx, {
         sampleRate: this.ctx.sampleRate,
         frequency,
-        durationSeconds: duration,
         stringType: this.stringType,
         pluckHardness: synthTech === 'sukui' ? 0.95 : 0.88,
         technique: synthTech,
-        bridgePosPercent: 50,
+        bridgePosPercent: known ? known.bridgePositionPercent : 50,
       });
       this.stringBufferCache.set(cacheKey, buffer);
     }
@@ -525,9 +519,10 @@ class KotoSoundEngine {
     const voiceGain = this.ctx.createGain();
     const duration = buffer.duration;
 
+    // 余韻はバッファ自体に入っているので、ここでは音量だけを決める。
+    // 和音や速いフレーズで重なっても割れないよう控えめの音量にする。
     voiceGain.gain.setValueAtTime(0.0001, now);
-    voiceGain.gain.linearRampToValueAtTime(1.15 * vel, now + 0.003); // 3ms attack
-    voiceGain.gain.setTargetAtTime(0.0001, now + 0.04, Math.max(0.25, duration * 0.38));
+    voiceGain.gain.linearRampToValueAtTime(0.6 * vel, now + 0.003); // 3ms attack
 
     // Connect voice chain
     sourceNode.connect(voiceGain);
@@ -684,7 +679,7 @@ class KotoSoundEngine {
     };
 
     symSource.start(now + 0.02);
-    symSource.stop(now + 1.85);
+    symSource.stop(now + 0.02 + Math.min(buffer.duration, 2.0));
   }
 
   /**

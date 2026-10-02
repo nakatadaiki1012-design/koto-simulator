@@ -1,22 +1,13 @@
 /**
- * Enhanced Physical Modeling Synthesis (Extended Karplus-Strong) for Japanese 13-String Koto (十三弦 箏)
+ * Physical Modeling Synthesis (Extended Karplus-Strong) for Japanese 13-String Koto (十三弦 箏)
  *
- * Implements:
- * 1. Ivory Plectrum (角爪・生田流/山田流) shaped attack with slip-stick transient & wooden soundboard contact thump.
- * 2. Pluck point comb filtering (plucking near the 竜角 / Ryukaku, ~12% vibrating length).
- * 3. Inharmonicity (string stiffness dispersion) for twisted silk and tetron cord harmonics.
- * 4. Sawari (サワリ) bridge notch grazing non-linearity.
- * 5. Full palette of Traditional Playing Techniques:
- *    - 本手（通常）: Standard ivory pluck
- *    - 押し手（Oshi-de）: Left-hand string press (+半音/+全音ピッチベンド)
- *    - 引き色（Hiki-iro）: Pre-pressed string released gracefully (-半音滑空)
- *    - 突き色（Tsuki-iro）: Momentary left-hand pressure accent on sustain
- *    - スクイ爪（Sukui）: Index finger upward flick, sharp and light
- *    - 割爪・トレモロ（Tremolo）: Rapid fluttering string strikes
- *    - 消音・ピチカート（Pizzicato）: Dry muted wooden staccato
- *    - 合わせ爪（Awase）: Octave dual pluck
- *    - 裏弾き（Ura-biki）: Non-vibrating side of bridge metallic chime
- * 6. Multi-point Paulownia Soundboard Acoustics (桐の竜甲・裏板・綾杉彫り 245Hz, 490Hz, 1250Hz).
+ * 安定性を最優先に作り直したバージョン:
+ * - ループ利得は必ず 1 未満（減衰時間 T60 から計算）→ 音が暴走・無音化しない
+ * - 分数遅延オールパスで正確なピッチ（全弦 ±数セント以内）
+ * - 象牙の角爪らしいアタック（撥弦位置コムフィルタ + 硬さに応じたノイズ）
+ * - 桐の胴鳴り（245Hz / 490Hz の安定なバンドパス）
+ * - 軽いサワリ風サチュレーション（ループの外でかけるので安全）
+ * - バッファ末尾のフェードアウトでプツッというノイズを防止
  */
 
 import { PlayingTechnique } from '../types/koto';
@@ -24,11 +15,38 @@ import { PlayingTechnique } from '../types/koto';
 export interface KotoStringSynthOptions {
   sampleRate: number;
   frequency: number;
-  durationSeconds: number;
+  durationSeconds?: number; // 省略時は弦と奏法から自動計算
   stringType?: 'silk' | 'tetron';
   pluckHardness?: number; // 0.0 to 1.0
   technique?: PlayingTechnique;
   bridgePosPercent?: number; // For urabiki calculation
+}
+
+/** 余韻（音量が -60dB になるまでの秒数） */
+export function getDecayTime(
+  frequency: number,
+  stringType: 'silk' | 'tetron' = 'silk',
+  technique: PlayingTechnique = 'normal'
+): number {
+  if (technique === 'pizzicato') return 0.28;
+  if (technique === 'urabiki') return 0.7;
+  // 低い弦ほど長く響く（147Hz で約3.4秒 → 880Hz で約1.9秒）
+  const octavesAbove = Math.log2(Math.max(60, frequency) / 147);
+  let t60 = 3.4 - octavesAbove * 0.6;
+  t60 = Math.max(1.4, Math.min(3.8, t60));
+  if (stringType === 'tetron') t60 *= 1.3;
+  if (technique === 'sukui') t60 *= 0.85;
+  return t60;
+}
+
+/** 生成するバッファの長さ（秒） */
+export function getSynthDuration(
+  frequency: number,
+  stringType: 'silk' | 'tetron' = 'silk',
+  technique: PlayingTechnique = 'normal'
+): number {
+  const t60 = getDecayTime(frequency, stringType, technique);
+  return Math.max(0.4, Math.min(4.5, t60 * 0.9));
 }
 
 export function synthesizeKotoString(
@@ -37,198 +55,172 @@ export function synthesizeKotoString(
 ): AudioBuffer {
   const {
     sampleRate,
-    durationSeconds,
     stringType = 'silk',
     pluckHardness = 0.85,
     technique = 'normal',
     bridgePosPercent = 50,
   } = options;
 
-  let baseFrequency = options.frequency;
+  let freq = options.frequency;
 
-  // Urabiki (裏弾き): Plucking the left, non-vibrating side of the bridge
+  // 裏弾き: 柱の左側（短い側）を弾くので高く金属的な音になる
   if (technique === 'urabiki') {
     const leftRatio = Math.max(0.15, bridgePosPercent / 100);
     const rightRatio = Math.max(0.15, 1 - leftRatio);
-    baseFrequency = Math.min(3200, baseFrequency * (rightRatio / leftRatio));
+    freq = Math.min(2400, freq * (rightRatio / leftRatio));
   }
+  freq = Math.max(40, Math.min(sampleRate / 8, freq));
 
-  const totalSamples = Math.floor(sampleRate * durationSeconds);
+  const durationSeconds =
+    options.durationSeconds ?? getSynthDuration(options.frequency, stringType, technique);
+  const totalSamples = Math.max(1, Math.floor(sampleRate * durationSeconds));
   const buffer = ctx.createBuffer(1, totalSamples, sampleRate);
-  const channel = buffer.getChannelData(0);
+  const out = buffer.getChannelData(0);
 
-  // Period in samples
-  const period = sampleRate / baseFrequency;
-  const N = Math.max(8, Math.floor(period));
-  const frac = period - N;
+  // ---------- 1. ループの設定（ピッチと減衰） ----------
+  // 低域通過フィルタ y = (1-w)x[n] + w x[n-1]  （遅延 w サンプル）
+  // w が大きいほど柔らかい音。絹は柔らかめ、テトロンは明るめ。
+  let w = stringType === 'silk' ? 0.42 : 0.34;
+  if (technique === 'pizzicato') w = 0.5;
+  else if (technique === 'sukui') w -= 0.06;
+  else if (technique === 'urabiki') w = 0.3;
+  w += (1 - pluckHardness) * 0.08;
+  w = Math.max(0.2, Math.min(0.5, w));
 
-  // String stiffness / inharmonicity allpass filter
-  const stiffness = stringType === 'silk' ? 0.00038 : 0.00019;
-  const allpassCoeff = Math.min(0.35, Math.max(-0.35, -stiffness * baseFrequency));
+  const period = sampleRate / freq; // ループ全体で必要な遅延（サンプル）
+  // 整数遅延 N と分数遅延 d（オールパスで実現）に分ける。d は 0.1〜1.1 に保つ
+  const N = Math.max(2, Math.floor(period - w - 0.1));
+  const d = period - N - w;
+  const apC = (1 - d) / (1 + d); // 一次オールパス係数（|apC|<1 なので安定）
 
-  // Loop damping factor
-  let decayRate = stringType === 'silk' ? 0.9942 : 0.9968;
-  if (technique === 'pizzicato') {
-    decayRate = 0.942; // Rapid wooden decay
-  } else if (technique === 'urabiki') {
-    decayRate = 0.988; // High metallic ring
-  } else if (technique === 'sukui') {
-    decayRate = 0.9935; // Lighter decay
-  }
-  const freqDamping = Math.min(0.9985, Math.max(0.92, decayRate - (baseFrequency / 2200) * 0.012));
+  // T60 から 1 周あたりの減衰量を計算（必ず 1 未満）
+  const t60 = getDecayTime(options.frequency, stringType, technique);
+  const loopGain = Math.min(0.9995, Math.pow(10, -3 / (freq * t60)));
 
-  // Pluck point ratio along string (Sukui plucks slightly closer to the bridge)
-  const pluckPointRatio = technique === 'urabiki' ? 0.25 : technique === 'sukui' ? 0.09 : 0.12;
-  const pluckDelaySamples = Math.max(2, Math.floor(N * pluckPointRatio));
-
-  // 1. Excitation Buffer Generation
-  const ringBuffer = new Float32Array(N + 2);
-  const noiseSeed = new Float32Array(N);
-
-  for (let i = 0; i < N; i++) {
+  // ---------- 2. 励振（爪で弾いた瞬間の形） ----------
+  const excLen = N;
+  const exc = new Float32Array(excLen);
+  // 硬い爪ほど高域の多いノイズ
+  const smooth = 0.15 + (1 - pluckHardness) * 0.6;
+  let lp = 0;
+  for (let i = 0; i < excLen; i++) {
     const white = Math.random() * 2 - 1;
-    const decayExponent = technique === 'sukui' ? 6.2 : 4.8;
-    const decay = Math.exp((-i / N) * decayExponent);
-    noiseSeed[i] = white * decay;
+    lp = lp + (1 - smooth) * (white - lp);
+    exc[i] = lp;
+  }
+  // 平均を 0 に（直流成分があるとボコッとした音になる）
+  let mean = 0;
+  for (let i = 0; i < excLen; i++) mean += exc[i];
+  mean /= excLen;
+  for (let i = 0; i < excLen; i++) exc[i] -= mean;
+
+  // 撥弦位置のコムフィルタ（竜角近く ≒ 弦長の 12%）
+  const pluckRatio = technique === 'urabiki' ? 0.25 : technique === 'sukui' ? 0.09 : 0.12;
+  const P = Math.max(1, Math.round(N * pluckRatio));
+  const shaped = new Float32Array(excLen);
+  for (let i = 0; i < excLen; i++) {
+    shaped[i] = exc[i] - (i >= P ? exc[i - P] : 0);
   }
 
-  // Comb-filtering excitation according to pluck position
-  for (let i = 0; i < N; i++) {
-    const delayed = i >= pluckDelaySamples ? noiseSeed[i - pluckDelaySamples] : 0;
-    ringBuffer[i] = noiseSeed[i] - delayed;
+  // ---------- 3. 弦の振動を計算 ----------
+  const raw = new Float32Array(totalSamples);
+  const L = N + 2;
+  const line = new Float32Array(L); // 遅延線（循環バッファ）
+  let writeIdx = 0;
+  let prevTap = 0;
+  let apIn1 = 0;
+  let apOut1 = 0;
+
+  for (let n = 0; n < totalSamples; n++) {
+    // N サンプル前の値
+    const readIdx = (writeIdx - N + L * 4) % L;
+    const tap = line[readIdx];
+
+    // 低域通過 + 減衰
+    const filtered = loopGain * ((1 - w) * tap + w * prevTap);
+    prevTap = tap;
+
+    // 分数遅延オールパス（ピッチの微調整）
+    const ap = apC * filtered + apIn1 - apC * apOut1;
+    apIn1 = filtered;
+    apOut1 = ap;
+
+    const y = ap + (n < excLen ? shaped[n] : 0);
+    line[writeIdx] = y;
+    writeIdx = (writeIdx + 1) % L;
+    raw[n] = y;
   }
 
-  // Ivory plectrum sharp attack click & slip transient
-  const clickMultiplier = technique === 'sukui' ? 1.8 : 1.5;
-  const clickLength = Math.min(
-    N,
-    Math.floor(sampleRate * (technique === 'pizzicato' ? 0.0014 : technique === 'sukui' ? 0.0018 : 0.0028))
-  );
-  for (let i = 0; i < clickLength; i++) {
-    const t = i / clickLength;
-    const click = Math.sin(t * Math.PI * (technique === 'sukui' ? 22 : 16)) * (1 - t) * (1 - t);
-    ringBuffer[i] += click * clickMultiplier * pluckHardness;
-  }
+  // ---------- 4. 胴鳴り・アタック・仕上げ ----------
+  const makeBandpass = (f0: number, q: number) => {
+    const w0 = (2 * Math.PI * f0) / sampleRate;
+    const alpha = Math.sin(w0) / (2 * q);
+    const a0 = 1 + alpha;
+    return {
+      b0: alpha / a0,
+      b2: -alpha / a0,
+      a1: (-2 * Math.cos(w0)) / a0,
+      a2: (1 - alpha) / a0,
+      x1: 0, x2: 0, y1: 0, y2: 0,
+    };
+  };
+  const runBp = (f: ReturnType<typeof makeBandpass>, x: number) => {
+    const y = f.b0 * x + f.b2 * f.x2 - f.a1 * f.y1 - f.a2 * f.y2;
+    f.x2 = f.x1; f.x1 = x; f.y2 = f.y1; f.y1 = y;
+    return y;
+  };
+  const body1 = makeBandpass(technique === 'urabiki' ? 580 : 245, 3.6);
+  const body2 = makeBandpass(490, 4.2);
 
-  // 2. Resonator states
-  let allpassPrevInput = 0;
-  let allpassPrevOutput = 0;
+  let bodyMix1 = 0.35;
+  let bodyMix2 = 0.2;
+  if (technique === 'pizzicato') { bodyMix1 = 0.5; bodyMix2 = 0.1; }
+  else if (technique === 'urabiki') { bodyMix1 = 0.1; bodyMix2 = 0.05; }
 
-  // Paulownia Body Cavity 245Hz Helmholtz Resonator
-  const bodyFreq = technique === 'urabiki' ? 580 : 245;
-  const bodyQ = 3.6;
-  const w0 = (2 * Math.PI * bodyFreq) / sampleRate;
-  const alpha = Math.sin(w0) / (2 * bodyQ);
-  const b0 = alpha;
-  const b1 = 0;
-  const b2 = -alpha;
-  const a0 = 1 + alpha;
-  const a1 = -2 * Math.cos(w0);
-  const a2 = 1 - alpha;
+  const knockLen = Math.floor(sampleRate * 0.018);
+  const clickLen = Math.floor(sampleRate * (technique === 'pizzicato' ? 0.0015 : 0.0025));
+  const sawariDrive = technique === 'normal' || technique === 'sukui' ? 1.6 : 1.0;
+  const sawariNorm = Math.tanh(sawariDrive);
 
-  let bpX1 = 0, bpX2 = 0, bpY1 = 0, bpY2 = 0;
+  // まずピークを測って正規化
+  let peak = 0;
+  for (let i = 0; i < totalSamples; i++) peak = Math.max(peak, Math.abs(raw[i]));
+  const norm = peak > 1e-6 ? 0.8 / peak : 0;
 
-  // Paulownia Soundboard 490Hz 2nd bending mode
-  const bodyFreq2 = 490;
-  const w0_2 = (2 * Math.PI * bodyFreq2) / sampleRate;
-  const alpha2 = Math.sin(w0_2) / (2 * 4.2);
-  const b0_2 = alpha2, b1_2 = 0, b2_2 = -alpha2;
-  const a0_2 = 1 + alpha2, a1_2 = -2 * Math.cos(w0_2), a2_2 = 1 - alpha2;
-
-  let bp2X1 = 0, bp2X2 = 0, bp2Y1 = 0, bp2Y2 = 0;
-
-  // 3. Synthesize waveform
-  const tempWave = new Float32Array(totalSamples);
-  let readIdx = 0;
+  const fadeLen = Math.min(totalSamples, Math.floor(sampleRate * 0.06));
+  let outPeak = 0;
 
   for (let i = 0; i < totalSamples; i++) {
-    const rawVal = ringBuffer[readIdx];
+    const x = raw[i] * norm;
+    let y = x + runBp(body1, x) * bodyMix1 + runBp(body2, x) * bodyMix2;
 
-    // Sawari non-linearity: high amplitude vibrations graze against the bridge notch
-    let sawariVal = rawVal;
-    if (Math.abs(rawVal) > 0.40 && (technique === 'normal' || technique === 'sukui')) {
-      const excess = Math.abs(rawVal) - 0.40;
-      // Fast polynomial saturation instead of expensive Math.sin in hot loop
-      const sign = rawVal > 0 ? 1 : -1;
-      sawariVal = rawVal + sign * (excess * excess * 0.45);
+    // サワリ風のごく軽い歪み（ループ外なので安定）
+    if (sawariDrive > 1) y = Math.tanh(y * sawariDrive) / sawariNorm;
+
+    // 爪のカチッという音
+    if (i < clickLen) {
+      const t = i / clickLen;
+      y += Math.sin(t * Math.PI * 14) * (1 - t) * (1 - t) * 0.25 * pluckHardness;
+    }
+    // 胴を叩いたような低いコツッ音
+    if (i < knockLen && technique !== 'urabiki') {
+      const t = i / knockLen;
+      y += Math.sin(t * Math.PI * 2.2) * (1 - t) * 0.08 * pluckHardness;
     }
 
-    // Lowpass moving average
-    const nextIdx = (readIdx + 1) % N;
-    const nextVal = ringBuffer[nextIdx];
-    const weight = 0.5 - (technique === 'sukui' ? 0.12 : 0.09) * (1 - pluckHardness);
-    const lowpassed = (sawariVal * (1 - weight) + nextVal * weight) * freqDamping;
+    // 最後はなめらかにフェードアウト（プツッ音防止）
+    const fromEnd = totalSamples - 1 - i;
+    if (fromEnd < fadeLen) y *= fromEnd / fadeLen;
 
-    // Fractional delay
-    const nextIdx2 = (readIdx + 2) % N;
-    const fracVal = lowpassed * (1 - frac) + ringBuffer[nextIdx2] * frac;
-
-    // Allpass dispersion
-    const dispersed = allpassCoeff * fracVal + allpassPrevInput - allpassCoeff * allpassPrevOutput;
-    allpassPrevInput = fracVal;
-    allpassPrevOutput = dispersed;
-
-    // Write back
-    ringBuffer[readIdx] = dispersed;
-    readIdx = nextIdx;
-
-    tempWave[i] = rawVal;
+    if (!isFinite(y)) y = 0;
+    out[i] = y;
+    outPeak = Math.max(outPeak, Math.abs(y));
   }
 
-  // 4. Normalize & Apply Body Cavity & Soundboard Blend
-  let maxAmp = 0;
-  for (let i = 0; i < Math.min(totalSamples, 2000); i++) {
-    const abs = Math.abs(tempWave[i]);
-    if (abs > maxAmp) maxAmp = abs;
-  }
-  const normFactor = maxAmp > 0.0001 ? 0.95 / maxAmp : 1.0;
-
-  // Soundboard mechanical knock length (~16ms)
-  const knockLength = Math.floor(sampleRate * 0.016);
-
-  for (let i = 0; i < totalSamples; i++) {
-    const direct = tempWave[i] * normFactor;
-
-    // 245Hz Cavity Filter (stabilized)
-    const bpOut = (b0 * direct + b1 * bpX1 + b2 * bpX2 - a1 * bpY1 - a2 * bpY2) / a0;
-    bpX2 = bpX1;
-    bpX1 = direct;
-    bpY2 = isFinite(bpOut) ? bpY1 * 0.998 : 0;
-    bpY1 = isFinite(bpOut) ? Math.max(-2, Math.min(2, bpOut)) : 0;
-
-    // 490Hz Plate Filter (stabilized)
-    const bpOut2 = (b0_2 * direct + b1_2 * bp2X1 + b2_2 * bp2X2 - a1_2 * bp2Y1 - a2_2 * bp2Y2) / a0_2;
-    bp2X2 = bp2X1;
-    bp2X1 = direct;
-    bp2Y2 = isFinite(bpOut2) ? bp2Y1 * 0.998 : 0;
-    bp2Y1 = isFinite(bpOut2) ? Math.max(-2, Math.min(2, bpOut2)) : 0;
-
-    // 55Hz Soundboard mechanical impulse knock on strike
-    let knock = 0;
-    if (i < knockLength && technique !== 'urabiki') {
-      const kt = i / knockLength;
-      knock = Math.sin(kt * Math.PI * 2.2) * (1 - kt) * 0.12 * pluckHardness;
-    }
-
-    let blended = direct * 0.78 + (isFinite(bpOut) ? bpOut : 0) * 0.22 + (isFinite(bpOut2) ? bpOut2 : 0) * 0.12 + knock;
-    if (technique === 'pizzicato') {
-      blended = direct * 0.88 + bpOut * 0.12;
-    } else if (technique === 'urabiki') {
-      blended = direct * 0.96 + bpOut * 0.04;
-    } else if (technique === 'sukui') {
-      blended = direct * 0.86 + bpOut * 0.14 + bpOut2 * 0.08;
-    }
-
-    // Write to channel with strict NaN guard and soft saturation
-    if (!isFinite(blended)) {
-      channel[i] = 0;
-    } else if (blended > 1.0) {
-      channel[i] = 1.0;
-    } else if (blended < -1.0) {
-      channel[i] = -1.0;
-    } else {
-      channel[i] = blended;
-    }
+  // 最終ピークを 0.9 に揃える（クリップしない）
+  if (outPeak > 0.9) {
+    const s = 0.9 / outPeak;
+    for (let i = 0; i < totalSamples; i++) out[i] *= s;
   }
 
   return buffer;
