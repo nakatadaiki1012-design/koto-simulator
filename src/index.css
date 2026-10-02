@@ -84,3 +84,58 @@
 .animate-string-vibrate-x {
   animation: stringVibrateX 0.45s ease-out;
 }
+
+/*
+ * 横向きのスマホなど「高さが低い画面」用のレイアウト
+ * 上のボタン類を1行にまとめて（横にスクロール）、箏の13本の弦が
+ * 一から巾まで全部画面に収まるようにする
+ */
+@media (orientation: landscape) and (max-height: 540px) {
+  .koto-header {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .koto-header-row,
+  .koto-header-tools {
+    flex-wrap: nowrap;
+  }
+  .koto-header-row {
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .koto-header-row::-webkit-scrollbar {
+    display: none;
+  }
+  .koto-header-row > * {
+    flex-shrink: 0;
+  }
+  .koto-techbar {
+    padding-top: 2px;
+    padding-bottom: 2px;
+  }
+  .koto-board-wrap {
+    padding: 4px;
+  }
+  .koto-label {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1;
+  }
+  .koto-label > span:first-child {
+    font-size: 0.8rem;
+    line-height: 1;
+  }
+}
+
+/* 高さが中くらいの画面（ノートPC・Chromebookなど）でも弦の名札が重ならないように */
+@media (max-height: 760px) {
+  .koto-label {
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: 1;
+  }
+  .koto-label > span:first-child {
+    font-size: 0.9rem;
+    line-height: 1.1;
+  }
+}

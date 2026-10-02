@@ -111,7 +111,7 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
         {/* Left Label Plate */}
         <div className="w-16 sm:w-20 md:w-24 shrink-0 flex items-center justify-center pl-2 sm:pl-4 z-20 pointer-events-none">
           <div
-            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-sm border transition-all duration-200 ${
+            className={`koto-label flex items-center gap-1.5 px-2.5 py-1 rounded-sm border transition-all duration-200 ${
               isActive
                 ? `bg-amber-400 text-stone-950 border-amber-300 scale-105 ${
                     glowLevel === 'vivid'

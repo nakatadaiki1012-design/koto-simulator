@@ -195,7 +195,7 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
   };
 
   return (
-    <div className="relative w-full h-full flex flex-col items-center justify-center p-2 sm:p-4 select-none touch-none overflow-hidden">
+    <div className="koto-board-wrap relative w-full h-full flex flex-col items-center justify-center p-2 sm:p-4 select-none touch-none overflow-hidden">
       {/* Koto Body Container (竜甲 / Ryukou) */}
       <div
         ref={boardRef}
@@ -249,7 +249,7 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
         {/* Strings Container */}
         <div
           className={`relative w-full h-full flex z-10 ${
-            orientation === 'horizontal' ? 'flex-col divide-y divide-amber-950/30' : 'flex-row divide-x divide-amber-950/30'
+            orientation === 'horizontal' ? 'flex-col py-2.5 divide-y divide-amber-950/30' : 'flex-row divide-x divide-amber-950/30'
           }`}
         >
           {activeTuning.strings.map((stringData) => (

@@ -86,7 +86,7 @@ export const TechniqueBar: React.FC<TechniqueBarProps> = ({
   ];
 
   return (
-    <div className="shrink-0 w-full bg-stone-950/85 border-b border-amber-950/40 px-2 sm:px-6 py-1.5 z-20 select-none backdrop-blur-md">
+    <div className="koto-techbar shrink-0 w-full bg-stone-950/85 border-b border-amber-950/40 px-2 sm:px-6 py-1.5 z-20 select-none backdrop-blur-md">
       <div className="max-w-7xl mx-auto flex items-center justify-between gap-1 sm:gap-2 overflow-x-auto no-scrollbar">
         <div className="flex items-center gap-1.5 text-xs text-amber-500/80 font-serif-jp shrink-0 mr-1 hidden md:flex">
           <span>特殊奏法:</span>
