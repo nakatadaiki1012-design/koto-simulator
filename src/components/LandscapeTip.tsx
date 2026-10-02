@@ -10,7 +10,30 @@ export const LandscapeTip: React.FC<LandscapeTipProps> = ({
   orientation,
   setOrientation,
 }) => {
-  const [isDismissed, setIsDismissed] = useState<boolean>(false);
+  // 一度閉じたら次回からは出さない
+  const [isDismissed, setIsDismissed] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('koto_landscape_tip_dismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  const dismiss = () => {
+    setIsDismissed(true);
+    try {
+      localStorage.setItem('koto_landscape_tip_dismissed', '1');
+    } catch {
+      // 保存できない環境では、このページを開いている間だけ非表示
+    }
+  };
+
+  // 表示しても数秒で自動的に消える（演奏のじゃまにならないように）
+  useEffect(() => {
+    if (isDismissed) return;
+    const timer = setTimeout(() => setIsDismissed(true), 5000);
+    return () => clearTimeout(timer);
+  }, [isDismissed]);
   const [isPortraitMobile, setIsPortraitMobile] = useState<boolean>(false);
 
   useEffect(() => {
@@ -29,7 +52,8 @@ export const LandscapeTip: React.FC<LandscapeTipProps> = ({
     };
   }, []);
 
-  if (!isPortraitMobile || isDismissed) {
+  // 縦置きモードを選んでいるときは出さない
+  if (!isPortraitMobile || isDismissed || orientation === 'vertical') {
     return null;
   }
 
@@ -50,15 +74,18 @@ export const LandscapeTip: React.FC<LandscapeTipProps> = ({
       <div className="flex items-center gap-1.5 shrink-0">
         {orientation === 'horizontal' && (
           <button
-            onClick={() => setOrientation('vertical')}
+            onClick={() => {
+              setOrientation('vertical');
+              dismiss();
+            }}
             className="px-2 py-1 bg-amber-600/80 hover:bg-amber-600 text-stone-950 font-bold rounded text-[11px] whitespace-nowrap"
           >
             縦置きに変更
           </button>
         )}
         <button
-          onClick={() => setIsDismissed(true)}
-          className="p-1 text-stone-400 hover:text-stone-200"
+          onClick={dismiss}
+          className="p-2 -m-1 text-stone-400 hover:text-stone-200"
           title="閉じる"
         >
           <X className="w-4 h-4" />
