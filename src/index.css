@@ -139,3 +139,10 @@
     line-height: 1.1;
   }
 }
+
+/* 右側の漢数字も、高さが低い画面では小さく */
+@media (max-height: 760px) {
+  .koto-label-right {
+    font-size: 0.9rem;
+  }
+}

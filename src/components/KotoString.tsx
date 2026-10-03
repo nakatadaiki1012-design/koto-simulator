@@ -219,20 +219,25 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
         </div>
 
         {/* Right Plucking Zone Indicator (竜角 / Ryukaku) */}
+        {/* 右側にも漢数字（一〜巾）を表示：右手側から見ても弦の名前がわかるように */}
         <div className="w-14 sm:w-16 shrink-0 h-full flex items-center justify-center border-l border-amber-950/40 bg-stone-950/30 z-20 pointer-events-none">
-          <div
-            className={`w-2.5 h-2.5 rounded-full transition-all duration-150 ${
+          <span
+            className={`koto-label-right font-serif-jp font-bold leading-none text-base sm:text-lg transition-all duration-150 ${
               isActive
-                ? `bg-amber-400 scale-150 ${
+                ? `text-amber-300 scale-125 ${
                     glowLevel === 'vivid'
-                      ? 'shadow-md shadow-amber-400'
+                      ? 'drop-shadow-[0_0_6px_rgba(251,191,36,0.9)]'
                       : glowLevel === 'subtle'
-                      ? 'shadow-sm shadow-amber-400'
+                      ? 'drop-shadow-[0_0_3px_rgba(251,191,36,0.6)]'
                       : ''
                   }`
-                : 'bg-stone-700/60'
+                : isGuideTarget
+                ? 'text-amber-200 animate-pulse'
+                : 'text-stone-300/90'
             }`}
-          />
+          >
+            {stringData.kanji}
+          </span>
         </div>
       </div>
     );
