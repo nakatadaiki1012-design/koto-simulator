@@ -45,6 +45,9 @@ class KotoSoundEngine {
   private ctx: AudioContext | null = null;
   private masterGain: GainNode | null = null;
   private compressor: DynamicsCompressorNode | null = null;
+  // 最終段：音量を上げても割れないようにするリミッター＋なめらかなクリッパー
+  private limiter: DynamicsCompressorNode | null = null;
+  private outputNode: AudioNode | null = null;
   private dryGain: GainNode | null = null;
   private wetGain: GainNode | null = null;
   private reverbSendGain: GainNode | null = null;
@@ -52,7 +55,7 @@ class KotoSoundEngine {
   private reverbLowpass: BiquadFilterNode | null = null;
   private convolver: ConvolverNode | null = null;
   private activeVoices: Map<number, ActiveVoice[]> = new Map();
-  private volume: number = 0.85;
+  private volume: number = 0.6;
   private isMuted: boolean = false;
   private initialized: boolean = false;
 
@@ -129,7 +132,27 @@ class KotoSoundEngine {
 
       // Master output gain
       this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.volume, this.ctx.currentTime);
+      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.volumeToGain(this.volume), this.ctx.currentTime);
+
+      // 最終リミッター：大きい音量でもピークを抑えて音割れを防ぐ
+      this.limiter = this.ctx.createDynamicsCompressor();
+      this.limiter.threshold.setValueAtTime(-4, this.ctx.currentTime);
+      this.limiter.knee.setValueAtTime(2, this.ctx.currentTime);
+      this.limiter.ratio.setValueAtTime(20, this.ctx.currentTime);
+      this.limiter.attack.setValueAtTime(0.001, this.ctx.currentTime);
+      this.limiter.release.setValueAtTime(0.12, this.ctx.currentTime);
+
+      // 念のための安全装置：それでも越えた瞬間の山だけをなめらかに丸める
+      const clipper = this.ctx.createWaveShaper();
+      const curve = new Float32Array(2048);
+      for (let i = 0; i < curve.length; i++) {
+        const x = (i / (curve.length - 1)) * 2 - 1;
+        curve[i] = Math.abs(x) < 0.8 ? x : Math.sign(x) * (0.8 + 0.18 * Math.tanh((Math.abs(x) - 0.8) / 0.18));
+      }
+      clipper.curve = curve;
+      clipper.oversample = '2x';
+      this.limiter.connect(clipper);
+      this.outputNode = clipper;
 
       // Dynamics compressor: softened to preserve natural string attack transients and eliminate pumping
       this.compressor = this.ctx.createDynamicsCompressor();
@@ -177,12 +200,13 @@ class KotoSoundEngine {
       this.convolver.connect(this.wetGain);
       this.wetGain.connect(this.masterGain);
 
-      this.masterGain.connect(this.ctx.destination);
+      this.masterGain.connect(this.limiter);
+      this.outputNode.connect(this.ctx.destination);
 
       // MediaStreamAudioDestinationNode for real-time recording
       if (this.ctx.createMediaStreamDestination) {
         this.mediaStreamDest = this.ctx.createMediaStreamDestination();
-        this.masterGain.connect(this.mediaStreamDest);
+        this.outputNode.connect(this.mediaStreamDest);
       }
 
       // Pre-warm zero-latency buffer cache for all strings of active tuning
@@ -292,10 +316,19 @@ class KotoSoundEngine {
     return this.initialized && this.ctx !== null && this.ctx.state === 'running';
   }
 
+  /**
+   * 音量つまみ（0〜1）を実際の増幅量に変換する。
+   * つまみ最大で約 3.6 倍（約 +11dB）。耳の感じ方に合わせて曲線にしている。
+   * 大きくしても最後のリミッターが音割れを防ぐ。
+   */
+  private volumeToGain(v: number): number {
+    return 3.6 * Math.pow(Math.max(0, Math.min(1, v)), 1.5);
+  }
+
   public setVolume(val: number): void {
     this.volume = Math.max(0, Math.min(1, val));
     if (this.masterGain && this.ctx && !this.isMuted) {
-      this.masterGain.gain.setTargetAtTime(this.volume, this.ctx.currentTime, 0.02);
+      this.masterGain.gain.setTargetAtTime(this.volumeToGain(this.volume), this.ctx.currentTime, 0.02);
     }
   }
 
@@ -306,7 +339,7 @@ class KotoSoundEngine {
   public setMute(mute: boolean): void {
     this.isMuted = mute;
     if (this.masterGain && this.ctx) {
-      this.masterGain.gain.setTargetAtTime(mute ? 0 : this.volume, this.ctx.currentTime, 0.02);
+      this.masterGain.gain.setTargetAtTime(mute ? 0 : this.volumeToGain(this.volume), this.ctx.currentTime, 0.02);
     }
   }
 
@@ -713,7 +746,7 @@ class KotoSoundEngine {
 
     if (!this.mediaStreamDest && this.ctx.createMediaStreamDestination) {
       this.mediaStreamDest = this.ctx.createMediaStreamDestination();
-      this.masterGain.connect(this.mediaStreamDest);
+      (this.outputNode || this.masterGain).connect(this.mediaStreamDest);
     }
 
     if (!this.mediaStreamDest) {

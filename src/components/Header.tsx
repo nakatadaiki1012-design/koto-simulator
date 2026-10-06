@@ -40,7 +40,7 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenRecordingDialog,
   onOpenVisualSettingsModal,
 }) => {
-  const [volume, setVolume] = useState<number>(0.85);
+  const [volume, setVolume] = useState<number>(0.6);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isGlissandoPlaying, setIsGlissandoPlaying] = useState<boolean>(false);
   const [audioReady, setAudioReady] = useState<boolean>(soundEngine.isReady());
