@@ -48,9 +48,10 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
   };
 
   const getSubLabelText = () => {
-    if (labelMode === 'kanji') return stringData.westernPitch;
-    if (labelMode === 'doremi') return stringData.kanji;
-    return stringData.kanji;
+    // オクターブ上げた弦は「D↑」のように矢印を付けて区別する
+    const up = stringData.octaveUp ? '↑' : '';
+    if (labelMode === 'kanji') return stringData.westernPitch + up;
+    return stringData.kanji + up;
   };
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -97,6 +98,23 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
     }
     return isHoriz ? '0 1px 3px rgba(0,0,0,0.7)' : '1px 0 3px rgba(0,0,0,0.7)';
   };
+
+  // 絹糸の質感：撚り目（斜めの細い筋）と、円柱らしい上下の陰影を重ねる
+  const getStringBackground = (isHoriz: boolean) => {
+    const base = isActive
+      ? `linear-gradient(${isHoriz ? '90deg' : '180deg'}, #fef08a 0%, #ffffff 50%, #fef08a 100%)`
+      : `linear-gradient(${isHoriz ? '90deg' : '180deg'}, #e7cf9f 0%, #fff9ec 40%, #e3c795 100%)`;
+    const shade = isHoriz
+      ? 'linear-gradient(180deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 45%, rgba(90,50,10,0.38) 100%)'
+      : 'linear-gradient(90deg, rgba(255,255,255,0.7) 0%, rgba(255,255,255,0) 45%, rgba(90,50,10,0.38) 100%)';
+    const twist = isActive
+      ? 'none'
+      : `repeating-linear-gradient(${isHoriz ? '112deg' : '22deg'}, rgba(110,62,16,0.28) 0 1px, transparent 1px 4px)`;
+    return twist === 'none' ? `${shade}, ${base}` : `${twist}, ${shade}, ${base}`;
+  };
+
+  // 弾いた瞬間に弦の上を走る光（色を持たない古いクラスの代わり）
+  const flashOpacity = glowLevel === 'vivid' ? 1 : 0.55;
 
   if (orientation === 'horizontal') {
     return (
@@ -149,9 +167,13 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
           {/* Pluck Glow Ripple (Disabled in 'off' mode for performance) */}
           {isActive && glowLevel !== 'off' && (
             <div
-              className={`absolute inset-x-0 h-4 bg-gradient-to-r from-transparent via-amber-400/${
-                glowLevel === 'vivid' ? '30' : '15'
-              } to-transparent blur-sm pointer-events-none animate-pulse`}
+              className="koto-flash-h absolute inset-x-0 h-3 pointer-events-none"
+              style={{
+                opacity: flashOpacity,
+                background:
+                  'linear-gradient(90deg, transparent 0%, rgba(255,205,110,0.9) 50%, transparent 100%)',
+                filter: 'blur(3px)',
+              }}
             />
           )}
 
@@ -162,9 +184,7 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
             }`}
             style={{
               height: `${stringData.stringThicknessPx}px`,
-              background: isActive
-                ? 'linear-gradient(90deg, #fef08a 0%, #ffffff 50%, #fef08a 100%)'
-                : 'linear-gradient(90deg, #ebd6b3 0%, #fef8ee 40%, #e8d0a7 100%)',
+              background: getStringBackground(true),
               boxShadow: getStringBoxShadow(true),
             }}
           />
@@ -220,7 +240,7 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
 
         {/* Right Plucking Zone Indicator (竜角 / Ryukaku) */}
         {/* 右側にも漢数字（一〜巾）を表示：右手側から見ても弦の名前がわかるように */}
-        <div className="w-14 sm:w-16 shrink-0 h-full flex items-center justify-center border-l border-amber-950/40 bg-stone-950/30 z-20 pointer-events-none">
+        <div className="koto-ryukaku w-14 sm:w-16 shrink-0 h-full flex items-center justify-center border-l border-amber-950/40 bg-stone-950/30 z-20 pointer-events-none">
           <span
             className={`koto-label-right font-serif-jp font-bold leading-none text-base sm:text-lg transition-all duration-150 ${
               isActive
@@ -294,9 +314,13 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
         {/* Pluck Glow Ripple */}
         {isActive && glowLevel !== 'off' && (
           <div
-            className={`absolute inset-y-0 w-4 bg-gradient-to-b from-transparent via-amber-400/${
-              glowLevel === 'vivid' ? '30' : '15'
-            } to-transparent blur-sm pointer-events-none animate-pulse`}
+            className="koto-flash-v absolute inset-y-0 w-3 pointer-events-none"
+            style={{
+              opacity: flashOpacity,
+              background:
+                'linear-gradient(180deg, transparent 0%, rgba(255,205,110,0.9) 50%, transparent 100%)',
+              filter: 'blur(3px)',
+            }}
           />
         )}
 
@@ -306,9 +330,7 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
           }`}
           style={{
             width: `${stringData.stringThicknessPx}px`,
-            background: isActive
-              ? 'linear-gradient(180deg, #fef08a 0%, #ffffff 50%, #fef08a 100%)'
-              : 'linear-gradient(180deg, #ebd6b3 0%, #fef8ee 40%, #e8d0a7 100%)',
+            background: getStringBackground(false),
             boxShadow: getStringBoxShadow(false),
           }}
         />

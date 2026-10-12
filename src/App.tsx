@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { Header } from './components/Header';
 import { TechniqueBar } from './components/TechniqueBar';
 import { KotoInstrument } from './components/KotoInstrument';
@@ -19,7 +19,7 @@ import {
   VisualSettings,
   DEFAULT_VISUAL_SETTINGS,
 } from './types/koto';
-import { HIRAJOSHI } from './data/tunings';
+import { HIRAJOSHI, applyOctaveUp } from './data/tunings';
 import { soundEngine, RecordingResult } from './utils/soundEngine';
 
 export default function App() {
@@ -33,6 +33,30 @@ export default function App() {
 
   // Tuning & Playing Technique
   const [activeTuning, setActiveTuning] = useState<KotoTuning>(HIRAJOSHI);
+  // 一弦をオクターブ上げる設定（ブラウザに保存して次回も引き継ぐ）
+  const [firstStringOctaveUp, setFirstStringOctaveUp] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('koto_first_string_octave_up') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const handleFirstStringOctaveUp = (val: boolean) => {
+    setFirstStringOctaveUp(val);
+    try {
+      localStorage.setItem('koto_first_string_octave_up', val ? '1' : '0');
+    } catch {}
+  };
+
+  // 設定を反映した「実際に使う調弦」。音・琴柱の位置・練習ガイドはすべてこれを見る
+  const effectiveTuning = useMemo(
+    () => applyOctaveUp(activeTuning, firstStringOctaveUp ? [1] : []),
+    [activeTuning, firstStringOctaveUp]
+  );
+  useEffect(() => {
+    soundEngine.setTuning(effectiveTuning);
+  }, [effectiveTuning]);
+
   const [currentTechnique, setCurrentTechnique] = useState<PlayingTechnique>('normal');
 
   // Recording State
@@ -101,7 +125,7 @@ export default function App() {
   };
 
   return (
-    <div className="relative w-screen h-screen flex flex-col bg-stone-950 text-stone-100 overflow-hidden select-none">
+    <div className="koto-stage relative w-screen h-screen flex flex-col bg-stone-950 text-stone-100 overflow-hidden select-none">
       {/* 1. Header Bar */}
       <Header
         labelMode={labelMode}
@@ -112,8 +136,10 @@ export default function App() {
         setShowKeyBinds={setShowKeyBinds}
         songGuideActive={songGuideActive}
         setSongGuideActive={setSongGuideActive}
-        activeTuning={activeTuning}
+        activeTuning={effectiveTuning}
         setActiveTuning={setActiveTuning}
+        firstStringOctaveUp={firstStringOctaveUp}
+        setFirstStringOctaveUp={handleFirstStringOctaveUp}
         onOpenTuningModal={() => setIsTuningModalOpen(true)}
         onRecordingComplete={handleRecordingComplete}
         hasRecording={latestRecording !== null}
@@ -134,10 +160,9 @@ export default function App() {
           onTargetStringChange={setCurrentGuideStringId}
           onClose={() => setSongGuideActive(false)}
           lastPluckedStringId={lastPluckedStringId}
-          activeTuning={activeTuning}
+          activeTuning={effectiveTuning}
           onSelectTuning={(tuning) => {
             setActiveTuning(tuning);
-            soundEngine.setTuning(tuning);
           }}
         />
       )}
@@ -149,7 +174,7 @@ export default function App() {
           showKeyBinds={showKeyBinds}
           orientation={orientation}
           currentGuideStringId={currentGuideStringId}
-          activeTuning={activeTuning}
+          activeTuning={effectiveTuning}
           currentTechnique={currentTechnique}
           visualSettings={visualSettings}
           onStringPlucked={handleStringPlucked}

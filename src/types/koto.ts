@@ -22,6 +22,7 @@ export interface KotoStringData {
   keyBindSub: string; // Alternate key (e.g. QWERTY letter)
   bridgePositionPercent: number; // Authentic physical location of 柱 (Ji) along the string (0 to 100%)
   stringThicknessPx: number; // Lower strings are thicker than high strings
+  octaveUp?: boolean; // 設定でオクターブ上げた弦（表示にバッジを出す）
 }
 
 export interface KotoTuning {

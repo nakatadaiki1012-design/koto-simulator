@@ -9,12 +9,34 @@ const STRING_THICKNESS = [3.2, 3.0, 2.8, 2.6, 2.4, 2.2, 2.0, 1.9, 1.7, 1.5, 1.4,
  * Calculates realistic physical bridge position on Koto (竜角=100%, 雲角=0%)
  * based on string frequency physics.
  */
-function calcBridgePos(freq: number): number {
+export function calcBridgePos(freq: number): number {
   const baseFreq = 146.83; // D3
   // Realistic physical arch accounting for tapered string gauge
   const lengthRatio = Math.pow(baseFreq / freq, 0.62);
   const vibratingLength = 78 * lengthRatio;
   return Math.min(88, Math.max(18, 100 - vibratingLength));
+}
+
+/**
+ * 指定した弦を1オクターブ上げた調弦を返す（元のデータは変更しない）。
+ * 周波数を2倍にし、琴柱の位置・音名（D3→D4）も合わせて計算し直す。
+ */
+export function applyOctaveUp(tuning: KotoTuning, stringIds: number[]): KotoTuning {
+  if (stringIds.length === 0) return tuning;
+  return {
+    ...tuning,
+    strings: tuning.strings.map((s) => {
+      if (!stringIds.includes(s.id)) return s;
+      const frequency = s.frequency * 2;
+      return {
+        ...s,
+        frequency,
+        westernNote: s.westernNote.replace(/(\d+)$/, (n) => String(Number(n) + 1)),
+        bridgePositionPercent: parseFloat(calcBridgePos(frequency).toFixed(1)),
+        octaveUp: true,
+      };
+    }),
+  };
 }
 
 function createStringData(

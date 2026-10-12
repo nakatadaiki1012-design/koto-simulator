@@ -16,6 +16,8 @@ interface HeaderProps {
   setSongGuideActive: (val: boolean) => void;
   activeTuning: KotoTuning;
   setActiveTuning: (tuning: KotoTuning) => void;
+  firstStringOctaveUp: boolean;
+  setFirstStringOctaveUp: (val: boolean) => void;
   onOpenTuningModal: () => void;
   onRecordingComplete: (result: RecordingResult) => void;
   hasRecording: boolean;
@@ -34,6 +36,8 @@ export const Header: React.FC<HeaderProps> = ({
   setSongGuideActive,
   activeTuning,
   setActiveTuning,
+  firstStringOctaveUp,
+  setFirstStringOctaveUp,
   onOpenTuningModal,
   onRecordingComplete,
   hasRecording,
@@ -81,7 +85,6 @@ export const Header: React.FC<HeaderProps> = ({
     const t = ALL_TUNINGS.find((item) => item.id === tuningId);
     if (t) {
       setActiveTuning(t);
-      soundEngine.setTuning(t);
     }
   };
 
@@ -204,6 +207,21 @@ export const Header: React.FC<HeaderProps> = ({
               ))}
             </select>
           </div>
+
+          {/* 一弦をオクターブ上げる（箏の合奏譜などで一弦を高く調弦する場合） */}
+          <button
+            onClick={() => setFirstStringOctaveUp(!firstStringOctaveUp)}
+            aria-pressed={firstStringOctaveUp}
+            className={`flex items-center gap-1 px-2 py-1 rounded-lg border text-xs font-serif-jp whitespace-nowrap transition-colors ${
+              firstStringOctaveUp
+                ? 'bg-amber-600 text-stone-950 border-amber-400 font-bold shadow-sm shadow-amber-900'
+                : 'bg-stone-900 text-stone-300 border-stone-800 hover:text-stone-100'
+            }`}
+            title="一の弦を1オクターブ上げます（もう一度押すと元に戻ります）"
+          >
+            <ArrowUp className="w-3.5 h-3.5" />
+            一弦 8va
+          </button>
 
           {/* Label selector: 漢数字 / ドレミ / 音名 */}
           <div className="flex items-center p-0.5 bg-stone-900 border border-stone-800 rounded-lg text-xs">

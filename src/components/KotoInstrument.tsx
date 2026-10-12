@@ -208,12 +208,31 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
         }`}
         style={{
           background: `
-            radial-gradient(ellipse at 50% 40%, rgba(217, 119, 6, 0.24) 0%, rgba(120, 53, 15, 0.5) 70%, rgba(41, 16, 4, 0.9) 100%),
-            linear-gradient(135deg, #78350f 0%, #92400e 25%, #b45309 50%, #92400e 75%, #451a03 100%)
+            linear-gradient(105deg, rgba(255, 236, 190, 0) 0%, rgba(255, 236, 190, 0.16) 16%, rgba(255, 236, 190, 0) 32%),
+            radial-gradient(ellipse at 50% 38%, rgba(234, 150, 40, 0.30) 0%, rgba(140, 62, 14, 0.45) 62%, rgba(36, 14, 4, 0.92) 100%),
+            linear-gradient(135deg, #7c3a10 0%, #99480f 24%, #bb5d12 50%, #99480f 76%, #3f1904 100%)
           `,
-          boxShadow: '0 25px 60px -10px rgba(0, 0, 0, 0.95), inset 0 2px 10px rgba(254, 240, 138, 0.18)',
+          boxShadow:
+            '0 30px 70px -12px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(242, 196, 109, 0.28), 0 0 60px -10px rgba(217, 119, 6, 0.35), inset 0 2px 10px rgba(254, 240, 138, 0.2)',
         }}
       >
+        {/* 桐の細かい木目（年輪）：太い綾杉彫りの上に、さらに細かい筋を重ねる */}
+        <div
+          className="absolute inset-0 pointer-events-none opacity-25 mix-blend-overlay"
+          style={{
+            backgroundImage: `repeating-linear-gradient(
+              ${orientation === 'horizontal' ? '0deg' : '90deg'},
+              rgba(255, 220, 160, 0.5) 0px,
+              transparent 1px,
+              transparent 3px,
+              rgba(40, 14, 2, 0.45) 4px,
+              transparent 5px
+            )`,
+          }}
+        />
+        {/* 金の象嵌ライン（縁の内側の細い金線） */}
+        <div className="absolute inset-[5px] rounded-[inherit] pointer-events-none z-30 border border-amber-300/20" />
+
         {/* Ayasugi-bori (綾杉彫り) fine woodgrain pattern */}
         <div
           className="absolute inset-0 pointer-events-none opacity-30 mix-blend-overlay"

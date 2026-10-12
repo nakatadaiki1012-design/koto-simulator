@@ -146,3 +146,110 @@
     font-size: 0.9rem;
   }
 }
+
+/* =====================================================================
+ * 見た目の仕上げ：黒漆・金・桐・青海波
+ * 画像は使わず CSS だけで描く（教室のタブレットでも軽く動く）
+ * ===================================================================== */
+
+/* 背景：奥から温かく光る黒漆に、ごく薄い青海波 */
+.koto-stage {
+  background-color: #0b0806;
+  background-image:
+    radial-gradient(ellipse 75% 60% at 50% 55%, rgba(176, 92, 20, 0.22), transparent 72%),
+    radial-gradient(circle 28px at 50% 100%, transparent 0 40%, rgba(242, 196, 109, 0.05) 40% 46%, transparent 46% 62%, rgba(242, 196, 109, 0.05) 62% 68%, transparent 68% 84%, rgba(242, 196, 109, 0.05) 84% 90%, transparent 90%),
+    radial-gradient(circle 28px at 50% 100%, transparent 0 40%, rgba(242, 196, 109, 0.05) 40% 46%, transparent 46% 62%, rgba(242, 196, 109, 0.05) 62% 68%, transparent 68% 84%, rgba(242, 196, 109, 0.05) 84% 90%, transparent 90%);
+  background-size: 100% 100%, 56px 28px, 56px 28px;
+  background-position: 0 0, 0 0, 28px 14px;
+}
+
+/* ヘッダー：金の細線で縁取った黒漆の帯 */
+.koto-header {
+  background: linear-gradient(180deg, rgba(26, 18, 12, 0.97), rgba(12, 9, 7, 0.95));
+  border-bottom: 1px solid transparent;
+  border-image: linear-gradient(90deg, transparent, rgba(242, 196, 109, 0.55) 50%, transparent) 1;
+  box-shadow: 0 10px 26px -14px rgba(0, 0, 0, 0.95);
+}
+.koto-header h1 {
+  background: linear-gradient(180deg, #ffeab0 0%, #e3a53f 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 8px rgba(245, 158, 11, 0.35));
+}
+
+/* ボタン：うっすら立体感のある漆の面。選んだものは金色に光る */
+.koto-header .bg-stone-900,
+.koto-techbar .bg-stone-900\/90 {
+  background: linear-gradient(180deg, rgba(52, 41, 32, 0.96), rgba(27, 21, 16, 0.96));
+  box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.08), 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.koto-header .bg-amber-600,
+.koto-techbar .bg-amber-600 {
+  background: linear-gradient(180deg, #fad07c 0%, #d98a2b 100%);
+  box-shadow: 0 0 16px -2px rgba(245, 158, 11, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.55);
+}
+.koto-header button,
+.koto-techbar button {
+  transition: transform 0.12s ease, box-shadow 0.2s ease, background-color 0.2s ease, color 0.2s ease;
+}
+.koto-header button:not(:disabled):hover,
+.koto-techbar button:not(:disabled):hover {
+  transform: translateY(-1px);
+}
+.koto-header button:not(:disabled):active,
+.koto-techbar button:not(:disabled):active {
+  transform: scale(0.97);
+}
+
+/* 特殊奏法バー */
+.koto-techbar {
+  background: linear-gradient(180deg, rgba(22, 15, 10, 0.92), rgba(12, 9, 7, 0.92));
+  border-bottom-color: rgba(242, 196, 109, 0.12);
+}
+
+/* 弦の名札：黒檀に金の縁。弾いた弦は金色に光る */
+.koto-label:not(.bg-amber-400):not(.bg-amber-500\/30) {
+  background: linear-gradient(180deg, #30261c 0%, #15100c 100%);
+  border-color: rgba(214, 170, 98, 0.4);
+  box-shadow: inset 0 1px 0 rgba(255, 236, 190, 0.14), 0 1px 3px rgba(0, 0, 0, 0.65);
+}
+.koto-label.bg-amber-400 {
+  background: linear-gradient(180deg, #ffe38f 0%, #f2b33d 100%);
+}
+
+/* 竜角（右の端）：黒檀の帯に金の縁 */
+.koto-ryukaku {
+  background: linear-gradient(90deg, rgba(8, 5, 3, 0.88), rgba(30, 18, 9, 0.92));
+  border-left: 1px solid rgba(242, 196, 109, 0.38);
+  box-shadow: inset 7px 0 12px -7px rgba(0, 0, 0, 0.9);
+}
+
+/* 弾いた瞬間に弦の上を走る光 */
+@keyframes flashSweepX {
+  0%   { transform: scaleX(0.45); opacity: 1; }
+  100% { transform: scaleX(1);    opacity: 0; }
+}
+@keyframes flashSweepY {
+  0%   { transform: scaleY(0.45); opacity: 1; }
+  100% { transform: scaleY(1);    opacity: 0; }
+}
+.koto-flash-h { animation: flashSweepX 0.7s ease-out forwards; }
+.koto-flash-v { animation: flashSweepY 0.7s ease-out forwards; }
+
+/* キーボード操作の目印 */
+button:focus-visible,
+select:focus-visible,
+input:focus-visible {
+  outline: 2px solid rgba(251, 191, 36, 0.85);
+  outline-offset: 2px;
+}
+
+/* 動きを減らす設定の人には、光の動きも止める */
+@media (prefers-reduced-motion: reduce) {
+  .koto-flash-h,
+  .koto-flash-v {
+    animation: none;
+    opacity: 0.5;
+  }
+}
