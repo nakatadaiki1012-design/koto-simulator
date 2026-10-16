@@ -187,7 +187,7 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
                   {glowLevel !== 'off' && (
                     <div className="absolute top-5 w-7 h-2.5 bg-black/60 blur-[2px] rounded-full" />
                   )}
-                  <svg width="24" height="28" viewBox="0 0 24 28" className={glowLevel !== 'off' ? 'drop-shadow-md' : ''}>
+                  <svg width="24" height="28" viewBox="0 0 24 28" className={`koto-bridge ${glowLevel !== 'off' ? 'drop-shadow-md' : ''}`}>
                     <path
                       d="M 2,26 C 5,26 6,22 12,22 C 18,22 19,26 22,26 L 17,9 L 7,9 Z"
                       fill="url(#bridgeIvoryGradH)"

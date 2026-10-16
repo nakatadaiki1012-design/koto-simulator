@@ -24,7 +24,42 @@ import { soundEngine, RecordingResult } from './utils/soundEngine';
 
 export default function App() {
   const [labelMode, setLabelMode] = useState<LabelMode>('kanji');
-  const [orientation, setOrientation] = useState<'horizontal' | 'vertical'>('horizontal');
+  const [orientation, setOrientationState] = useState<'horizontal' | 'vertical'>('horizontal');
+
+  // 立体ビュー（横置きのときだけ使える）。設定と傾きはブラウザに保存
+  const [view3d, setView3dState] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('koto_view3d') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const [tilt, setTiltState] = useState<number>(() => {
+    try {
+      const v = Number(localStorage.getItem('koto_tilt'));
+      return v >= 15 && v <= 55 ? v : 38;
+    } catch {
+      return 38;
+    }
+  });
+  const setView3d = (val: boolean) => {
+    setView3dState(val);
+    if (val) setOrientationState('horizontal');
+    try {
+      localStorage.setItem('koto_view3d', val ? '1' : '0');
+    } catch {}
+  };
+  const setTilt = (deg: number) => {
+    setTiltState(deg);
+    try {
+      localStorage.setItem('koto_tilt', String(deg));
+    } catch {}
+  };
+  // 縦置きにしたら立体ビューは自動で切る
+  const setOrientation = (o: 'horizontal' | 'vertical') => {
+    setOrientationState(o);
+    if (o === 'vertical' && view3d) setView3d(false);
+  };
   const [showKeyBinds, setShowKeyBinds] = useState<boolean>(true);
   const [songGuideActive, setSongGuideActive] = useState<boolean>(false);
   const [currentGuideStringId, setCurrentGuideStringId] = useState<number | null>(null);
@@ -85,7 +120,7 @@ export default function App() {
     const isMobile = window.innerWidth < 768;
     const isPortrait = window.innerHeight > window.innerWidth;
     if (isMobile && isPortrait) {
-      setOrientation('vertical');
+      setOrientationState('vertical');
     }
   }, []);
 
@@ -132,6 +167,8 @@ export default function App() {
         setLabelMode={setLabelMode}
         orientation={orientation}
         setOrientation={setOrientation}
+        view3d={view3d && orientation === 'horizontal'}
+        setView3d={setView3d}
         showKeyBinds={showKeyBinds}
         setShowKeyBinds={setShowKeyBinds}
         songGuideActive={songGuideActive}
@@ -178,6 +215,9 @@ export default function App() {
           currentTechnique={currentTechnique}
           visualSettings={visualSettings}
           onStringPlucked={handleStringPlucked}
+          view3d={view3d}
+          tilt={tilt}
+          onTiltChange={setTilt}
         />
       </main>
 

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Volume2, VolumeX, Sparkles, Music, HelpCircle, Layers, Disc, Square, Wind, SlidersHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
+import { Box, Volume2, VolumeX, Sparkles, Music, HelpCircle, Layers, Disc, Square, Wind, SlidersHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
 import { LabelMode, KotoTuning } from '../types/koto';
 import { soundEngine, RecordingResult, KotoStringType } from '../utils/soundEngine';
 import { ReverbEnvironment, REVERB_ENVIRONMENTS } from '../utils/reverb';
@@ -10,6 +10,8 @@ interface HeaderProps {
   setLabelMode: (mode: LabelMode) => void;
   orientation: 'horizontal' | 'vertical';
   setOrientation: (val: 'horizontal' | 'vertical') => void;
+  view3d: boolean;
+  setView3d: (val: boolean) => void;
   showKeyBinds: boolean;
   setShowKeyBinds: (val: boolean) => void;
   songGuideActive: boolean;
@@ -30,6 +32,8 @@ export const Header: React.FC<HeaderProps> = ({
   setLabelMode,
   orientation,
   setOrientation,
+  view3d,
+  setView3d,
   showKeyBinds,
   setShowKeyBinds,
   songGuideActive,
@@ -309,6 +313,21 @@ export const Header: React.FC<HeaderProps> = ({
               ))}
             </select>
           </div>
+
+          {/* 立体ビュー：奏者の座る位置から見下ろす角度で弾く */}
+          <button
+            onClick={() => setView3d(!view3d)}
+            aria-pressed={view3d}
+            className={`flex items-center gap-1 px-2.5 py-1 text-xs rounded-lg border whitespace-nowrap font-serif-jp ${
+              view3d
+                ? 'bg-amber-600 text-stone-950 border-amber-400 font-bold'
+                : 'bg-stone-900 border-stone-800 text-stone-300 hover:text-white hover:border-stone-700'
+            }`}
+            title="箏を手前に寝かせて、座って弾くときの角度で表示します"
+          >
+            <Box className="w-3.5 h-3.5" />
+            立体
+          </button>
 
           {/* Orientation switch */}
           <button
