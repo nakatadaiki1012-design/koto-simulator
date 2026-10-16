@@ -314,7 +314,7 @@ export const Header: React.FC<HeaderProps> = ({
             </select>
           </div>
 
-          {/* 立体ビュー：奏者の座る位置から見下ろす角度で弾く */}
+          {/* 3D表示（おまけ機能）：箏を回して見ながら弾ける */}
           <button
             onClick={() => setView3d(!view3d)}
             aria-pressed={view3d}
@@ -323,7 +323,7 @@ export const Header: React.FC<HeaderProps> = ({
                 ? 'bg-amber-600 text-stone-950 border-amber-400 font-bold'
                 : 'bg-stone-900 border-stone-800 text-stone-300 hover:text-white hover:border-stone-700'
             }`}
-            title="箏を手前に寝かせて、座って弾くときの角度で表示します"
+            title="箏の3Dモデルを表示します。回したり拡大したりしながら、弦をタップして弾けます（もう一度押すと元に戻ります）"
           >
             <Box className="w-3.5 h-3.5" />
             立体

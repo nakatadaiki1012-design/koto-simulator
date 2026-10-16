@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from 'react';
 import { Header } from './components/Header';
 import { TechniqueBar } from './components/TechniqueBar';
 import { KotoInstrument } from './components/KotoInstrument';
@@ -20,13 +20,16 @@ import {
   DEFAULT_VISUAL_SETTINGS,
 } from './types/koto';
 import { HIRAJOSHI, applyOctaveUp } from './data/tunings';
+
+// 3D表示は使うときだけ読み込む（ふだんの表示を重くしないため）
+const Koto3DView = lazy(() => import('./components/Koto3DView'));
 import { soundEngine, RecordingResult } from './utils/soundEngine';
 
 export default function App() {
   const [labelMode, setLabelMode] = useState<LabelMode>('kanji');
   const [orientation, setOrientationState] = useState<'horizontal' | 'vertical'>('horizontal');
 
-  // 立体ビュー（横置きのときだけ使える）。設定と傾きはブラウザに保存
+  // 3D表示（おまけ機能）。オン／オフはブラウザに保存
   const [view3d, setView3dState] = useState<boolean>(() => {
     try {
       return localStorage.getItem('koto_view3d') === '1';
@@ -34,31 +37,15 @@ export default function App() {
       return false;
     }
   });
-  const [tilt, setTiltState] = useState<number>(() => {
-    try {
-      const v = Number(localStorage.getItem('koto_tilt'));
-      return v >= 15 && v <= 55 ? v : 38;
-    } catch {
-      return 38;
-    }
-  });
   const setView3d = (val: boolean) => {
     setView3dState(val);
-    if (val) setOrientationState('horizontal');
     try {
       localStorage.setItem('koto_view3d', val ? '1' : '0');
     } catch {}
   };
-  const setTilt = (deg: number) => {
-    setTiltState(deg);
-    try {
-      localStorage.setItem('koto_tilt', String(deg));
-    } catch {}
-  };
-  // 縦置きにしたら立体ビューは自動で切る
   const setOrientation = (o: 'horizontal' | 'vertical') => {
     setOrientationState(o);
-    if (o === 'vertical' && view3d) setView3d(false);
+    if (view3d) setView3d(false); // 向きを選んだら2Dの表示に戻す
   };
   const [showKeyBinds, setShowKeyBinds] = useState<boolean>(true);
   const [songGuideActive, setSongGuideActive] = useState<boolean>(false);
@@ -167,7 +154,7 @@ export default function App() {
         setLabelMode={setLabelMode}
         orientation={orientation}
         setOrientation={setOrientation}
-        view3d={view3d && orientation === 'horizontal'}
+        view3d={view3d}
         setView3d={setView3d}
         showKeyBinds={showKeyBinds}
         setShowKeyBinds={setShowKeyBinds}
@@ -206,19 +193,32 @@ export default function App() {
 
       {/* 4. Main Musical Instrument Stage */}
       <main className="relative flex-1 w-full h-full min-h-0 flex items-center justify-center p-1 sm:p-3 overflow-hidden">
-        <KotoInstrument
-          labelMode={labelMode}
-          showKeyBinds={showKeyBinds}
-          orientation={orientation}
-          currentGuideStringId={currentGuideStringId}
-          activeTuning={effectiveTuning}
-          currentTechnique={currentTechnique}
-          visualSettings={visualSettings}
-          onStringPlucked={handleStringPlucked}
-          view3d={view3d}
-          tilt={tilt}
-          onTiltChange={setTilt}
-        />
+        {view3d ? (
+          <Suspense
+            fallback={
+              <div className="text-sm text-amber-200/80 font-serif-jp animate-pulse">3Dの箏を準備しています…</div>
+            }
+          >
+            <Koto3DView
+              activeTuning={effectiveTuning}
+              currentTechnique={currentTechnique}
+              labelMode={labelMode}
+              currentGuideStringId={currentGuideStringId}
+              onStringPlucked={handleStringPlucked}
+            />
+          </Suspense>
+        ) : (
+          <KotoInstrument
+            labelMode={labelMode}
+            showKeyBinds={showKeyBinds}
+            orientation={orientation}
+            currentGuideStringId={currentGuideStringId}
+            activeTuning={effectiveTuning}
+            currentTechnique={currentTechnique}
+            visualSettings={visualSettings}
+            onStringPlucked={handleStringPlucked}
+          />
+        )}
       </main>
 
       {/* 5. Mobile Landscape Tip Toast */}

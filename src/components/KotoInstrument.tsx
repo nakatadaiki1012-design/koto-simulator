@@ -13,11 +13,6 @@ interface KotoInstrumentProps {
   currentTechnique: PlayingTechnique;
   visualSettings?: VisualSettings;
   onStringPlucked?: (stringId: number) => void;
-  /** 立体ビュー（奏者の座る位置から見下ろす角度に箏を寝かせる） */
-  view3d?: boolean;
-  /** 立体ビューの傾き（度） */
-  tilt?: number;
-  onTiltChange?: (deg: number) => void;
 }
 
 export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
@@ -29,13 +24,7 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
   currentTechnique,
   visualSettings,
   onStringPlucked,
-  view3d = false,
-  tilt = 38,
-  onTiltChange,
 }) => {
-  const is3d = view3d && orientation === 'horizontal';
-  // 寝かせると縦につぶれて見える琴柱・名札を、立って見えるように縦に伸ばす倍率
-  const standScale = is3d ? Math.min(2, 1 / Math.cos((tilt * Math.PI) / 180)) : 1;
   const [activeStrings, setActiveStrings] = useState<Set<number>>(new Set());
   const stringElementsRef = useRef<Map<number, HTMLElement>>(new Map());
   const activePointersRef = useRef<Map<number, number>>(new Map());
@@ -48,6 +37,26 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
     } else {
       stringElementsRef.current.delete(stringId);
     }
+  }, []);
+
+  // 弦を光らせ、震わせる（音は鳴らさない）
+  const flashString = useCallback((stringId: number) => {
+    setActiveStrings((prev) => {
+      const next = new Set(prev);
+      next.add(stringId);
+      return next;
+    });
+    const existingTimer = timeoutsRef.current.get(stringId);
+    if (existingTimer) clearTimeout(existingTimer);
+    const timer = setTimeout(() => {
+      setActiveStrings((prev) => {
+        const next = new Set(prev);
+        next.delete(stringId);
+        return next;
+      });
+      timeoutsRef.current.delete(stringId);
+    }, 1400);
+    timeoutsRef.current.set(stringId, timer);
   }, []);
 
   const triggerPluck = useCallback(
@@ -65,45 +74,26 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
       soundEngine.playString(stringId, stringData.frequency, velocity, effectiveTechnique);
 
       // Visual vibration trigger
-      setActiveStrings((prev) => {
-        const next = new Set(prev);
-        next.add(stringId);
-        return next;
-      });
-
-      const existingTimer = timeoutsRef.current.get(stringId);
-      if (existingTimer) {
-        clearTimeout(existingTimer);
-      }
-
-      const timer = setTimeout(() => {
-        setActiveStrings((prev) => {
-          const next = new Set(prev);
-          next.delete(stringId);
-          return next;
-        });
-        timeoutsRef.current.delete(stringId);
-      }, 1400);
-
-      timeoutsRef.current.set(stringId, timer);
+      flashString(stringId);
 
       if (onStringPlucked) {
         onStringPlucked(stringId);
       }
     },
-    [activeTuning.strings, currentTechnique, onStringPlucked]
+    [activeTuning.strings, currentTechnique, onStringPlucked, flashString]
   );
 
   // Custom pluck event (e.g. from Glissando or Song Guide)
   useEffect(() => {
+    // 引連・お手本再生は送り手が音を鳴らすので、ここでは光らせるだけ（二重に鳴らさない）
     const handleCustomPluck = (e: CustomEvent<{ stringId: number }>) => {
-      triggerPluck(e.detail.stringId, false, 0.85);
+      flashString(e.detail.stringId);
     };
     window.addEventListener('koto:pluck' as unknown as keyof WindowEventMap, handleCustomPluck as EventListener);
     return () => {
       window.removeEventListener('koto:pluck' as unknown as keyof WindowEventMap, handleCustomPluck as EventListener);
     };
-  }, [triggerPluck]);
+  }, [flashString]);
 
   // Keyboard shortcut listener for Chromebook & PC students
   useEffect(() => {
@@ -180,30 +170,7 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
   };
 
   return (
-    <div
-      className={`koto-board-wrap relative w-full h-full flex flex-col items-center justify-center p-2 sm:p-4 select-none touch-none overflow-hidden ${
-        is3d ? 'koto-3d' : ''
-      }`}
-      style={
-        is3d
-          ? ({ perspective: '1100px', perspectiveOrigin: '50% 0%', ['--koto-stand' as string]: standScale } as React.CSSProperties)
-          : undefined
-      }
-    >
-      {/* 立体ビューのときは、この箱ごと手前に寝かせる（奥＝一、手前＝巾） */}
-      <div
-        className="koto-3d-body relative w-full h-full max-w-7xl max-h-[860px] flex"
-        style={
-          is3d
-            ? {
-                transform: `rotateX(${tilt}deg) scale(0.92)`,
-                transformOrigin: '50% 100%',
-                transformStyle: 'preserve-3d',
-                transition: 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)',
-              }
-            : { transition: 'transform 0.5s cubic-bezier(0.22, 1, 0.36, 1)' }
-        }
-      >
+    <div className="koto-board-wrap relative w-full h-full flex flex-col items-center justify-center p-2 sm:p-4 select-none touch-none overflow-hidden">
       {/* Koto Body Container (竜甲 / Ryukou) */}
       <div
         ref={boardRef}
@@ -211,7 +178,7 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUpOrCancel}
         onPointerCancel={handlePointerUpOrCancel}
-        className={`relative w-full h-full rounded-2xl sm:rounded-3xl shadow-2xl border border-amber-900/60 overflow-hidden flex ${
+        className={`relative w-full h-full max-w-7xl max-h-[860px] rounded-2xl sm:rounded-3xl shadow-2xl border border-amber-900/60 overflow-hidden flex ${
           orientation === 'horizontal' ? 'flex-col' : 'flex-row'
         }`}
         style={{
@@ -304,37 +271,6 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
         </div>
       </div>
 
-      {/* 立体ビュー：手前の側面（箏の厚み）。本体から下向きに折り曲げて見せる */}
-      {is3d && (
-        <div
-          className="absolute left-[1.5%] right-[1.5%] top-full h-7 pointer-events-none rounded-b-2xl"
-          style={{
-            transformOrigin: '50% 0%',
-            transform: 'rotateX(-90deg)',
-            background:
-              'linear-gradient(180deg, #5a280a 0%, #3a1806 55%, #1c0b03 100%), repeating-linear-gradient(90deg, rgba(0,0,0,0.25) 0 2px, transparent 2px 9px)',
-            boxShadow: 'inset 0 1px 0 rgba(242, 196, 109, 0.35)',
-          }}
-        />
-      )}
-      </div>
-
-      {/* 立体ビューの傾きを調整するつまみ */}
-      {is3d && onTiltChange && (
-        <label className="absolute right-3 top-2 z-50 flex items-center gap-2 px-3 py-1.5 rounded-full bg-stone-950/85 border border-amber-500/40 text-[11px] text-amber-200 font-serif-jp shadow-lg">
-          傾き
-          <input
-            type="range"
-            min={15}
-            max={55}
-            step={1}
-            value={tilt}
-            onChange={(e) => onTiltChange(Number(e.target.value))}
-            className="w-20 sm:w-28 h-1.5 accent-amber-500 cursor-pointer"
-            aria-label="箏の傾き"
-          />
-        </label>
-      )}
     </div>
   );
 };
