@@ -54,27 +54,6 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
     return stringData.kanji + up;
   };
 
-  const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    let isLeftSide = false;
-
-    if (trackRef.current) {
-      const rect = trackRef.current.getBoundingClientRect();
-      if (orientation === 'horizontal') {
-        const clickX = e.clientX - rect.left;
-        const width = rect.width;
-        const clickRatioPercent = (clickX / width) * 100;
-        isLeftSide = clickRatioPercent < stringData.bridgePositionPercent;
-      } else {
-        const clickY = e.clientY - rect.top;
-        const height = rect.height;
-        const clickRatioPercent = (clickY / height) * 100;
-        isLeftSide = clickRatioPercent < stringData.bridgePositionPercent;
-      }
-    }
-
-    onPluck(stringData.id, isLeftSide);
-  };
 
   // Visual settings defaults
   const vibrationEnabled = visualSettings ? visualSettings.vibrationAnimation : true;
@@ -124,7 +103,6 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
         className={`relative flex items-center w-full h-full select-none cursor-pointer group transition-colors duration-150 ${
           isGuideTarget ? 'bg-amber-500/10' : ''
         }`}
-        onPointerDown={handlePointerDown}
       >
         {/* Left Label Plate */}
         <div className="w-16 sm:w-20 md:w-24 shrink-0 flex items-center justify-center pl-2 sm:pl-4 z-20 pointer-events-none">
@@ -161,7 +139,7 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
         </div>
 
         {/* String Track Area */}
-        <div ref={trackRef} className="relative flex-1 h-full flex items-center">
+        <div ref={trackRef} data-track className="relative flex-1 h-full flex items-center">
           <div className="absolute inset-y-0 w-full hover:bg-amber-500/5 transition-colors" />
 
           {/* Pluck Glow Ripple (Disabled in 'off' mode for performance) */}
@@ -271,7 +249,6 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
       className={`relative flex flex-col items-center h-full w-full select-none cursor-pointer group transition-colors duration-150 ${
         isGuideTarget ? 'bg-amber-500/10' : ''
       }`}
-      onPointerDown={handlePointerDown}
     >
       {/* Top Label Plate */}
       <div className="w-full shrink-0 flex flex-col items-center justify-center pt-2 pb-1 z-20 pointer-events-none">
@@ -308,7 +285,7 @@ const KotoStringComponent: React.FC<KotoStringProps> = ({
       </div>
 
       {/* Vertical Track Area */}
-      <div ref={trackRef} className="relative flex-1 w-full flex justify-center items-center">
+      <div ref={trackRef} data-track className="relative flex-1 w-full flex justify-center items-center">
         <div className="absolute inset-x-0 h-full hover:bg-amber-500/5 transition-colors" />
 
         {/* Pluck Glow Ripple */}

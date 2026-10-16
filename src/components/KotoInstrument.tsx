@@ -1,6 +1,7 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { KotoTuning, PlayingTechnique, LabelMode, VisualSettings } from '../types/koto';
 import { KotoString } from './KotoString';
+import { TECHNIQUE_LABELS } from './TechniqueBar';
 import { soundEngine } from '../utils/soundEngine';
 
 interface KotoInstrumentProps {
@@ -117,56 +118,32 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
     };
   }, [activeTuning.strings, triggerPluck]);
 
-  const boardRectRef = useRef<DOMRect | null>(null);
 
+  // 指（マウス）の位置にある弦を、画面上の実際の弦の行から探す。
+  // 琴柱の左右も、その弦の「糸の部分」の幅で判定する（名札や竜角の幅に影響されない）
   const getStringAtCoords = useCallback(
     (clientX: number, clientY: number): { id: number; isLeft: boolean } | null => {
-      let rect = boardRectRef.current;
-      if (!rect && boardRef.current) {
-        rect = boardRef.current.getBoundingClientRect();
-        boardRectRef.current = rect;
-      }
-      if (!rect) return null;
+      const hit = document.elementFromPoint(clientX, clientY);
+      const row = hit ? (hit.closest('[data-string-id]') as HTMLElement | null) : null;
+      if (!row || !boardRef.current || !boardRef.current.contains(row)) return null;
+      const id = Number(row.dataset.stringId);
+      const s = activeTuning.strings.find((item) => item.id === id);
+      if (!s) return null;
 
-      if (
-        clientX < rect.left ||
-        clientX > rect.right ||
-        clientY < rect.top ||
-        clientY > rect.bottom
-      ) {
-        return null;
-      }
-
-      const totalStrings = activeTuning.strings.length;
-      if (orientation === 'horizontal') {
-        const stringHeight = rect.height / totalStrings;
-        const idx = Math.floor((clientY - rect.top) / stringHeight);
-        if (idx >= 0 && idx < totalStrings) {
-          const s = activeTuning.strings[idx];
-          const xRatio = ((clientX - rect.left) / rect.width) * 100;
-          const isLeft = xRatio < s.bridgePositionPercent;
-          return { id: s.id, isLeft };
-        }
-      } else {
-        const stringWidth = rect.width / totalStrings;
-        const idx = Math.floor((clientX - rect.left) / stringWidth);
-        if (idx >= 0 && idx < totalStrings) {
-          const s = activeTuning.strings[idx];
-          const yRatio = ((clientY - rect.top) / rect.height) * 100;
-          const isLeft = yRatio < s.bridgePositionPercent;
-          return { id: s.id, isLeft };
-        }
-      }
-
-      return null;
+      const track = row.querySelector('[data-track]') as HTMLElement | null;
+      const r = (track || row).getBoundingClientRect();
+      const ratio =
+        orientation === 'horizontal'
+          ? ((clientX - r.left) / r.width) * 100
+          : ((clientY - r.top) / r.height) * 100;
+      // 名札や竜角の上をタップしたときは琴柱の右側（通常の撥弦）として扱う
+      const isLeft = ratio >= 0 && ratio <= 100 && ratio < s.bridgePositionPercent;
+      return { id, isLeft };
     },
     [activeTuning.strings, orientation]
   );
 
   const handlePointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
-    if (boardRef.current) {
-      boardRectRef.current = boardRef.current.getBoundingClientRect();
-    }
     const result = getStringAtCoords(e.clientX, e.clientY);
     activePointersRef.current.set(e.pointerId, result ? result.id : -1);
 
@@ -189,9 +166,6 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
 
   const handlePointerUpOrCancel = (e: React.PointerEvent<HTMLDivElement>) => {
     activePointersRef.current.delete(e.pointerId);
-    if (activePointersRef.current.size === 0) {
-      boardRectRef.current = null;
-    }
   };
 
   return (
@@ -263,6 +237,13 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
             <div className="absolute top-0 inset-x-0 h-3 bg-gradient-to-b from-stone-950 via-amber-950 to-transparent pointer-events-none z-30 border-b border-amber-500/20" />
             <div className="absolute bottom-0 inset-x-0 h-3 bg-gradient-to-t from-stone-950 via-amber-950 to-transparent pointer-events-none z-30 border-t border-amber-500/20" />
           </>
+        )}
+
+        {/* いま発動している特殊奏法の表示（本手のときは出さない） */}
+        {currentTechnique !== 'normal' && (
+          <div className="absolute top-2 left-1/2 -translate-x-1/2 z-40 pointer-events-none px-3 py-0.5 rounded-full bg-stone-950/85 border border-amber-400/60 text-amber-200 text-xs font-serif-jp font-bold shadow-lg shadow-black/60">
+            {TECHNIQUE_LABELS[currentTechnique]}
+          </div>
         )}
 
         {/* Strings Container */}
