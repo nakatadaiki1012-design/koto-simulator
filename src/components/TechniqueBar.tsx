@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { PlayingTechnique } from '../types/koto';
-import { Hand, Waves, VolumeX, Sparkles, ArrowUpRight, ArrowDownRight, Activity, Zap, Layers } from 'lucide-react';
+import { Hand, Waves, VolumeX, Sparkles, ArrowUpRight, ArrowDownRight, Activity, Zap, Layers, ChevronsDown, Wind } from 'lucide-react';
 
 interface TechniqueBarProps {
   currentTechnique: PlayingTechnique;
@@ -21,6 +21,8 @@ export const TECHNIQUE_LABELS: Record<PlayingTechnique, string> = {
   awase: '合わせ爪',
   pizzicato: '消音',
   urabiki: '裏弾き',
+  uraren: '裏連',
+  waren: '輪連',
 };
 
 /**
@@ -37,6 +39,8 @@ const TECHNIQUE_KEYS: { code: string; tech: PlayingTechnique; label: string }[] 
   { code: 'KeyY', tech: 'awase', label: 'Y' },
   { code: 'KeyU', tech: 'pizzicato', label: 'U' },
   { code: 'KeyI', tech: 'urabiki', label: 'I' },
+  { code: 'KeyO', tech: 'uraren', label: 'O' },
+  { code: 'KeyP', tech: 'waren', label: 'P' },
 ];
 
 interface TechniqueItem {
@@ -208,6 +212,22 @@ export const TechniqueBar: React.FC<TechniqueBarProps> = ({
       subname: '柱の左側',
       description: '琴柱の左側を弾く、現代曲で多用される幻想的な高域金属音',
       icon: <Sparkles className="w-3.5 h-3.5" />,
+    },
+    {
+      id: 'uraren',
+      name: '裏連',
+      subname: 'サーラリン',
+      description:
+        '巾を人差し指で細かく弾き、中指・人差し指の爪の裏で一の方へ流し下りて、最後に親指で2音を弾く。タップした弦が最後の音になります（一をタップ→「二・一」で終わる）',
+      icon: <ChevronsDown className="w-3.5 h-3.5" />,
+    },
+    {
+      id: 'waren',
+      name: '輪連',
+      subname: 'こする',
+      description:
+        '人差し指と中指の爪の横で、となり合う2本の弦を素早くこする（ふつうは一・二）。タップした弦とそのとなりの弦でこすります',
+      icon: <Wind className="w-3.5 h-3.5" />,
     },
   ];
 

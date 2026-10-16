@@ -85,7 +85,7 @@ export const TuningModal: React.FC<TuningModalProps> = ({ isOpen, onClose }) => 
               <div className="p-2.5 bg-stone-950/60 rounded-lg border border-stone-800">
                 <span className="font-bold text-amber-200 block font-serif-jp">① 押し手（押手 / Oshi-de）</span>
                 <span className="text-stone-300">
-                  左手で琴柱の左側を強く押し込んで弦の張力を高め、音程を半音滑らかにベンドアップする伝統技法です。「押し手」ボタンを選択して弾くか、弦の左側をタップすることで発動します。
+                  左手で琴柱の左側を強く押し込んで弦の張力を高め、音程を半音滑らかにベンドアップする伝統技法です。「押す間」モードでは、左手で「押し手」ボタンを押さえたまま右手で弾きます（PCはスペースキーを押しながら）。
                 </span>
               </div>
               <div className="p-2.5 bg-stone-950/60 rounded-lg border border-stone-800">
@@ -113,7 +113,19 @@ export const TuningModal: React.FC<TuningModalProps> = ({ isOpen, onClose }) => 
                 </span>
               </div>
               <div className="p-2.5 bg-stone-950/60 rounded-lg border border-stone-800">
-                <span className="font-bold text-amber-200 block font-serif-jp">⑥ 空間残響効果（ConvolverNode リバーブ）</span>
+                <span className="font-bold text-amber-200 block font-serif-jp">⑥ 裏連（うられん・サーラリン）</span>
+                <span className="text-stone-300">
+                  巾を人差し指で細かく弾いてから、中指・人差し指の爪の裏で交互に一の方へ流し下り、最後に親指で2音をほぼ同時に弾きます。「裏連」ボタンを押さえて弦をタップすると、その弦を最後の音として一連の動きを再現します。
+                </span>
+              </div>
+              <div className="p-2.5 bg-stone-950/60 rounded-lg border border-stone-800">
+                <span className="font-bold text-amber-200 block font-serif-jp">⑦ 輪連（われん）</span>
+                <span className="text-stone-300">
+                  人差し指と中指の爪の横で、となり合う2本の弦（ふつうは一・二）を素早くこすります。こすれる「シュッ」という音と弦の響きが重なります。「輪連」ボタンを押さえて弦をタップすると、その弦ととなりの弦でこすります。
+                </span>
+              </div>
+              <div className="p-2.5 bg-stone-950/60 rounded-lg border border-stone-800">
+                <span className="font-bold text-amber-200 block font-serif-jp">⑧ 空間残響効果（ConvolverNode リバーブ）</span>
                 <span className="text-stone-300">
                   ヘッダーの残響メニューから「スタジオ（タイトな直接音）」「能舞台（檜と畳の温かい響き）」「大本堂（寺院の壮大なロングリバーブ）」「残響なし（完全ドライ音）」を瞬時に切り替えられます。
                 </span>

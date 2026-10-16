@@ -458,6 +458,16 @@ class KotoSoundEngine {
       return;
     }
 
+    // 裏連・輪連：1回のタップで一連の動きをまるごと再現する
+    if (tech === 'uraren') {
+      this.executeUraren(stringId, velocity);
+      return;
+    }
+    if (tech === 'waren') {
+      this.executeWaren(stringId, velocity);
+      return;
+    }
+
     // Handle Awase-tsume: octave/harmonic dual pluck
     if (tech === 'awase') {
       this.executeAwase(stringId, frequency, velocity);
@@ -471,10 +481,11 @@ class KotoSoundEngine {
     stringId: number,
     frequency: number,
     velocity: number,
-    tech: PlayingTechnique
+    tech: PlayingTechnique,
+    delaySec: number = 0 // 何秒後に鳴らすか（オーディオの正確な時計で予約する）
   ): void {
     if (!this.ctx || !this.compressor) return;
-    const now = this.ctx.currentTime;
+    const now = this.ctx.currentTime + Math.max(0, delaySec);
     const vel = Math.max(0.2, Math.min(1.0, velocity));
 
     // Polyphony per string: smoothly damp previous voice of the exact same string
@@ -562,7 +573,7 @@ class KotoSoundEngine {
     voiceGain.connect(pannerNode);
     pannerNode.connect(this.compressor);
 
-    sourceNode.start(0);
+    sourceNode.start(now);
     sourceNode.stop(now + duration + 0.05);
 
     // 5. Sympathetic String Resonance (throttled to prevent CPU spikes)
@@ -621,6 +632,106 @@ class KotoSoundEngine {
         }
       }
     };
+  }
+
+  /** 画面上の弦を光らせる合図（音は鳴らさない。2D・3Dどちらの表示も反応する） */
+  private signalVisual(stringId: number): void {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('koto:pluck', { detail: { stringId } }));
+    }
+  }
+
+  /**
+   * 決めた時刻に、決めた弦を弾いて光らせる。
+   * 音はオーディオの正確な時計で先に予約する（画面が重くてもリズムが崩れない）。
+   * 光らせる合図だけ、画面のタイマーで出す。
+   */
+  private scheduleSequence(steps: { id: number; t: number; v: number }[]): void {
+    const order = [...steps].sort((a, b) => a.t - b.t);
+    for (const step of order) {
+      const data = this.activeTuning.strings.find((s) => s.id === step.id);
+      if (!data) continue;
+      this.executePluck(step.id, data.frequency, Math.max(0.2, Math.min(1, step.v)), 'normal', step.t / 1000);
+      setTimeout(() => this.signalVisual(step.id), step.t);
+    }
+  }
+
+  /**
+   * 裏連（うられん・サーラリン）
+   * 1. 巾を人差し指で細かく弾く（トレモロ）
+   * 2. 中指・人差し指の爪の裏で、交互に一の方へ軽く流し下りる
+   * 3. 最後に親指で2音をほぼ同時に弾く（手前の弦→向こうの弦の順）
+   * タップした弦が最後の音になる（一をタップ → 「二・一」で終わる）
+   */
+  private executeUraren(targetId: number, velocity: number): void {
+    const endLow = Math.max(1, Math.min(12, targetId));
+    const steps: { id: number; t: number; v: number }[] = [];
+    let t = 0;
+    for (let i = 0; i < 4; i++) {
+      steps.push({ id: 13, t, v: velocity * (i === 0 ? 0.8 : 0.62) });
+      t += 55;
+    }
+    for (let id = 12; id >= endLow + 2; id--) {
+      steps.push({ id, t, v: velocity * 0.42 }); // 爪の裏で軽く
+      t += 48;
+    }
+    t += 30;
+    steps.push({ id: endLow + 1, t, v: velocity * 0.9 });
+    steps.push({ id: endLow, t: t + 28, v: velocity * 0.95 });
+    this.scheduleSequence(steps);
+  }
+
+  /**
+   * 輪連（われん）
+   * 人差し指と中指の爪の横で、となり合う2本の弦を素早くこする。
+   * こすれる音（シュッ）に、こすられた弦の響きが重なる。
+   * タップした弦とそのとなりの弦でこする（一をタップ → 一・二）
+   */
+  private executeWaren(targetId: number, velocity: number): void {
+    const lo = Math.max(1, Math.min(12, targetId));
+    this.playScrapeNoise(velocity);
+    // 人差し指が上の弦、中指が下の弦をこする
+    this.scheduleSequence([
+      { id: lo + 1, t: 0, v: velocity * 0.55 },
+      { id: lo, t: 35, v: velocity * 0.6 },
+    ]);
+  }
+
+  /** 爪で弦をこする「シュッ」という音（高い所から低い所へ音色が移る雑音） */
+  private playScrapeNoise(velocity: number, durationSec: number = 0.22): void {
+    const ctx = this.ctx;
+    if (!ctx || !this.compressor) return;
+    const len = Math.floor(ctx.sampleRate * durationSec);
+    const buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    for (let i = 0; i < len; i++) {
+      const p = i / len;
+      const env = (p < 0.05 ? p / 0.05 : 1) * Math.pow(1 - p, 1.4);
+      d[i] = (Math.random() * 2 - 1) * env;
+    }
+    const now = ctx.currentTime;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    const bp = ctx.createBiquadFilter();
+    bp.type = 'bandpass';
+    bp.Q.setValueAtTime(1.4, now);
+    bp.frequency.setValueAtTime(4200, now);
+    bp.frequency.exponentialRampToValueAtTime(900, now + durationSec);
+    const g = ctx.createGain();
+    g.gain.setValueAtTime(0.55 * velocity, now);
+    src.connect(bp);
+    bp.connect(g);
+    g.connect(this.compressor);
+    src.onended = () => {
+      try {
+        src.disconnect();
+        bp.disconnect();
+        g.disconnect();
+      } catch {
+        // Disconnected
+      }
+    };
+    src.start(now);
   }
 
   /**

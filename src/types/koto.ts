@@ -9,7 +9,9 @@ export type PlayingTechnique =
   | 'tremolo'    // 割爪・トレモロ（素早い連続連打）
   | 'pizzicato'  // 消音・ピチカート（手のひらを当てて余韻を止めた短音）
   | 'awase'      // 合わせ爪（八度・和音の同時撥弦）
-  | 'urabiki';   // 裏弾き（琴柱の左側を弾く高域金属共鳴音）
+  | 'urabiki'    // 裏弾き（琴柱の左側を弾く高域金属共鳴音）
+  | 'uraren'     // 裏連（巾のトレモロ→中指・人差し指で流し下り→親指で2音）
+  | 'waren';     // 輪連（人差し指・中指の爪の横で2本の弦を素早くこする）
 
 export interface KotoStringData {
   id: number; // 1 to 13
