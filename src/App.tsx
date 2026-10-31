@@ -7,7 +7,7 @@ import React, { useState, useEffect, useCallback, useMemo, Suspense, lazy } from
 import { Header } from './components/Header';
 import { TechniqueBar } from './components/TechniqueBar';
 import { KotoInstrument } from './components/KotoInstrument';
-import { SongGuideBar } from './components/SongGuideBar';
+import { SongGuideBar, PluckSignal } from './components/SongGuideBar';
 import { TuningModal } from './components/TuningModal';
 import { LandscapeTip } from './components/LandscapeTip';
 import { RecordingDialog } from './components/RecordingDialog';
@@ -50,7 +50,7 @@ export default function App() {
   const [showKeyBinds, setShowKeyBinds] = useState<boolean>(true);
   const [songGuideActive, setSongGuideActive] = useState<boolean>(false);
   const [currentGuideStringId, setCurrentGuideStringId] = useState<number | null>(null);
-  const [lastPluckedStringId, setLastPluckedStringId] = useState<number | null>(null);
+  const [lastPluck, setLastPluck] = useState<PluckSignal | null>(null);
   const [isTuningModalOpen, setIsTuningModalOpen] = useState<boolean>(false);
 
   // Tuning & Playing Technique
@@ -130,7 +130,7 @@ export default function App() {
   const handleStringPlucked = useCallback(
     (stringId: number) => {
       if (songGuideActive) {
-        setLastPluckedStringId(stringId);
+        setLastPluck((prev) => ({ stringId, seq: (prev?.seq ?? 0) + 1 }));
       }
     },
     [songGuideActive]
@@ -183,7 +183,7 @@ export default function App() {
           labelMode={labelMode}
           onTargetStringChange={setCurrentGuideStringId}
           onClose={() => setSongGuideActive(false)}
-          lastPluckedStringId={lastPluckedStringId}
+          lastPluck={lastPluck}
           activeTuning={effectiveTuning}
           onSelectTuning={(tuning) => {
             setActiveTuning(tuning);

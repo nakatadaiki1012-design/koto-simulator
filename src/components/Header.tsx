@@ -355,7 +355,7 @@ export const Header: React.FC<HeaderProps> = ({
             <span>鍵盤ガイド</span>
           </button>
 
-          {/* Sakura Sakura Practice Mode Toggle */}
+          {/* 曲の練習（ガイド・縦譜）の切り替え */}
           <button
             onClick={() => setSongGuideActive(!songGuideActive)}
             className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border transition-all whitespace-nowrap ${
@@ -365,7 +365,7 @@ export const Header: React.FC<HeaderProps> = ({
             }`}
           >
             <Music className="w-3.5 h-3.5 text-rose-400" />
-            <span>さくらさくら</span>
+            <span>曲の練習</span>
           </button>
 
           {/* Dual Glissando: 引連（上り）& 流し爪（下り） */}

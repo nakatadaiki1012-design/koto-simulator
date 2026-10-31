@@ -8,13 +8,13 @@ export const SAKURA_SONG: Song = {
   id: 'sakura',
   title: 'さくらさくら',
   subtitle: '日本古謡・文部省唱歌',
-  description: '音楽の授業や箏の入門で最初に学ぶ最も有名な伝統曲。七（G4）と八（A4）を中心とした情緒あふれる都節音階を味わえます。',
+  description: '音楽の授業や箏の入門で最初に学ぶ最も有名な伝統曲。七（G4）と八（A4）を中心とした情緒あふれる都節音階を味わえます。弦の番号は「七・七・八〜｜七・七・八〜｜七・八・九・八・七・八七・六〜」と始まります。',
   bpm: 64,
   tuningId: 'hirajoshi',
   tuningName: '平調子',
   difficulty: '初級',
   notes: [
-    // 1. さくら さくら
+    // 七・七・八〜 ｜ 七・七・八〜
     { stringId: 7, duration: 1, lyric: 'さ', section: '1. さくら さくら' },
     { stringId: 7, duration: 1, lyric: 'く' },
     { stringId: 8, duration: 2, lyric: 'ら' },
@@ -22,59 +22,58 @@ export const SAKURA_SONG: Song = {
     { stringId: 7, duration: 1, lyric: 'く' },
     { stringId: 8, duration: 2, lyric: 'ら' },
 
-    // 2. やよいの空は
+    // 七・八・九・八・七・八七・六〜
     { stringId: 7, duration: 1, lyric: 'や', section: '2. やよいの空は' },
     { stringId: 8, duration: 1, lyric: 'よ' },
     { stringId: 9, duration: 1, lyric: 'い' },
     { stringId: 8, duration: 1, lyric: 'の' },
     { stringId: 7, duration: 1, lyric: 'そ' },
-    { stringId: 8, duration: 1, lyric: 'ら' },
-    { stringId: 7, duration: 2, lyric: 'は' },
-    { stringId: 5, duration: 4, lyric: '―' },
+    { stringId: 8, duration: 0.5, lyric: 'ら' },
+    { stringId: 7, duration: 0.5, lyric: '〜' },
+    { stringId: 6, duration: 2, lyric: 'は' },
 
-    // 3. 見渡す限り
-    { stringId: 7, duration: 1, lyric: 'み', section: '3. 見渡す限り' },
-    { stringId: 8, duration: 1, lyric: 'わ' },
-    { stringId: 9, duration: 1, lyric: 'た' },
+    // 五・四・五・六・五・五四・三〜
+    { stringId: 5, duration: 1, lyric: 'み', section: '3. 見わたす限り' },
+    { stringId: 4, duration: 1, lyric: 'わ' },
+    { stringId: 5, duration: 1, lyric: 'た' },
+    { stringId: 6, duration: 1, lyric: 'す' },
+    { stringId: 5, duration: 1, lyric: 'か' },
+    { stringId: 5, duration: 0.5, lyric: 'ぎ' },
+    { stringId: 4, duration: 0.5, lyric: '〜' },
+    { stringId: 3, duration: 2, lyric: 'り' },
+
+    { stringId: 7, duration: 1, lyric: 'か', section: '4. かすみか雲か' },
     { stringId: 8, duration: 1, lyric: 'す' },
-    { stringId: 7, duration: 1, lyric: 'か' },
-    { stringId: 8, duration: 1, lyric: 'ぎ' },
-    { stringId: 7, duration: 2, lyric: 'り' },
-    { stringId: 5, duration: 4, lyric: '―' },
+    { stringId: 9, duration: 1, lyric: 'み' },
+    { stringId: 8, duration: 1, lyric: 'か' },
+    { stringId: 7, duration: 1, lyric: 'く' },
+    { stringId: 8, duration: 0.5, lyric: 'も' },
+    { stringId: 7, duration: 0.5, lyric: '〜' },
+    { stringId: 6, duration: 2, lyric: 'か' },
 
-    // 4. かすみか雲か
-    { stringId: 3, duration: 1, lyric: 'か', section: '4. かすみか雲か' },
-    { stringId: 4, duration: 1, lyric: 'す' },
-    { stringId: 4, duration: 1, lyric: 'み' },
-    { stringId: 3, duration: 1, lyric: 'か' },
-    { stringId: 4, duration: 1, lyric: 'く' },
-    { stringId: 8, duration: 1, lyric: 'も' },
-    { stringId: 7, duration: 1, lyric: 'か' },
-    { stringId: 4, duration: 1, lyric: 'ー' },
-    { stringId: 3, duration: 4, lyric: '―' },
+    { stringId: 5, duration: 1, lyric: 'に', section: '5. 匂いぞ出ずる' },
+    { stringId: 4, duration: 1, lyric: 'お' },
+    { stringId: 5, duration: 1, lyric: 'い' },
+    { stringId: 6, duration: 1, lyric: 'ぞ' },
+    { stringId: 5, duration: 1, lyric: 'い' },
+    { stringId: 5, duration: 0.5, lyric: 'ず' },
+    { stringId: 4, duration: 0.5, lyric: '〜' },
+    { stringId: 3, duration: 2, lyric: 'る' },
 
-    // 5. 匂いぞ出づる
-    { stringId: 7, duration: 1, lyric: 'に', section: '5. 匂いぞ出づる' },
-    { stringId: 8, duration: 1, lyric: 'お' },
-    { stringId: 9, duration: 1, lyric: 'い' },
-    { stringId: 8, duration: 1, lyric: 'ぞ' },
-    { stringId: 7, duration: 1, lyric: 'い' },
-    { stringId: 8, duration: 1, lyric: 'づ' },
-    { stringId: 7, duration: 2, lyric: 'る' },
-    { stringId: 5, duration: 4, lyric: '―' },
-
-    // 6. いざや見にゆかん
-    { stringId: 7, duration: 1, lyric: 'い', section: '6. いざや見にゆかん' },
+    { stringId: 7, duration: 1, lyric: 'い', section: '6. いざや いざや' },
     { stringId: 7, duration: 1, lyric: 'ざ' },
     { stringId: 8, duration: 2, lyric: 'や' },
     { stringId: 7, duration: 1, lyric: 'い' },
     { stringId: 7, duration: 1, lyric: 'ざ' },
     { stringId: 8, duration: 2, lyric: 'や' },
-    { stringId: 9, duration: 2, lyric: 'み' },
-    { stringId: 8, duration: 2, lyric: 'に' },
-    { stringId: 7, duration: 2, lyric: 'ゆ' },
-    { stringId: 8, duration: 2, lyric: 'か' },
-    { stringId: 7, duration: 4, lyric: 'ん' },
+
+    // 五・六・八七・六・五〜
+    { stringId: 5, duration: 1, lyric: 'み', section: '7. 見にゆかん' },
+    { stringId: 6, duration: 1, lyric: 'に' },
+    { stringId: 8, duration: 0.5, lyric: 'ゆ' },
+    { stringId: 7, duration: 0.5, lyric: '〜' },
+    { stringId: 6, duration: 1, lyric: 'か' },
+    { stringId: 5, duration: 4, lyric: 'ん' },
   ],
 };
 

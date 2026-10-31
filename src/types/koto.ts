@@ -45,7 +45,7 @@ export interface PluckEvent {
 }
 
 export interface SongNote {
-  stringId: number;
+  stringId: number; // 0 は休み（音を出さない）
   duration: number; // In beats (1 = 1 beat, 0.5 = half beat, 2 = 2 beats)
   lyric?: string;
   section?: string;
@@ -60,7 +60,8 @@ export interface Song {
   bpm: number;
   tuningId: string; // e.g. 'hirajoshi' | 'kumoi'
   tuningName: string;
-  difficulty: '入門' | '初級' | '中級' | '上級';
+  difficulty: '入門' | '初級' | '中級' | '上級' | '自作';
+  custom?: boolean; // 自分で追加した曲（ブラウザに保存）
   notes: SongNote[];
 }
 
