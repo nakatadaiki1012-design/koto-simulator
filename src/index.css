@@ -253,3 +253,50 @@ input:focus-visible {
     opacity: 0.5;
   }
 }
+
+/* リズム練習：「良・可・不可」や「はじめ！」がポンと出て消える */
+.rhythm-pop {
+  transform: translate(-50%, -50%);
+  animation: rhythmPop 0.6s ease-out forwards;
+  white-space: nowrap;
+}
+@keyframes rhythmPop {
+  0% { transform: translate(-50%, -50%) scale(0.6); opacity: 0; }
+  20% { transform: translate(-50%, -80%) scale(1.15); opacity: 1; }
+  70% { transform: translate(-50%, -110%) scale(1); opacity: 1; }
+  100% { transform: translate(-50%, -130%) scale(1); opacity: 0; }
+}
+
+/*
+ * スマホなど小さい画面では、上のボタンを「メニュー」にしまって、
+ * 箏を弾く場所をできるだけ広くする
+ */
+.koto-compact-only {
+  display: none !important;
+}
+@media (max-width: 767px), (orientation: landscape) and (max-height: 540px) {
+  .koto-compact-only {
+    display: flex !important;
+  }
+  .koto-wide-only {
+    display: none !important;
+  }
+  .koto-header .koto-header-tools {
+    display: none;
+  }
+  .koto-header.menu-open .koto-header-tools {
+    display: flex;
+    position: absolute;
+    left: 0;
+    right: 0;
+    top: 100%;
+    flex-wrap: wrap;
+    gap: 8px;
+    padding: 10px 12px 12px;
+    max-height: 70vh;
+    overflow-y: auto;
+    background: rgba(12, 9, 7, 0.98);
+    border-bottom: 1px solid rgba(146, 64, 14, 0.6);
+    box-shadow: 0 16px 30px rgba(0, 0, 0, 0.7);
+  }
+}

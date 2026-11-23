@@ -8,6 +8,7 @@ import { Header } from './components/Header';
 import { TechniqueBar } from './components/TechniqueBar';
 import { KotoInstrument } from './components/KotoInstrument';
 import { SongGuideBar, PluckSignal } from './components/SongGuideBar';
+import { RhythmOverlay, RhythmSession } from './components/RhythmOverlay';
 import { TuningModal } from './components/TuningModal';
 import { LandscapeTip } from './components/LandscapeTip';
 import { RecordingDialog } from './components/RecordingDialog';
@@ -52,6 +53,8 @@ export default function App() {
   const [songGuideActive, setSongGuideActive] = useState<boolean>(false);
   const [currentGuideStringId, setCurrentGuideStringId] = useState<number | null>(null);
   const [lastPluck, setLastPluck] = useState<PluckSignal | null>(null);
+  // リズム練習（音符が弦の上を流れてくる）をしているときの設定
+  const [rhythmSession, setRhythmSession] = useState<RhythmSession | null>(null);
   const [isTuningModalOpen, setIsTuningModalOpen] = useState<boolean>(false);
 
   // Tuning & Playing Technique
@@ -160,7 +163,10 @@ export default function App() {
         showKeyBinds={showKeyBinds}
         setShowKeyBinds={setShowKeyBinds}
         songGuideActive={songGuideActive}
-        setSongGuideActive={setSongGuideActive}
+        setSongGuideActive={(v: boolean) => {
+          setSongGuideActive(v);
+          if (!v) setRhythmSession(null);
+        }}
         activeTuning={effectiveTuning}
         setActiveTuning={setActiveTuning}
         firstStringOctaveUp={firstStringOctaveUp}
@@ -183,7 +189,13 @@ export default function App() {
         <SongGuideBar
           labelMode={labelMode}
           onTargetStringChange={setCurrentGuideStringId}
-          onClose={() => setSongGuideActive(false)}
+          onClose={() => {
+            setSongGuideActive(false);
+            setRhythmSession(null);
+          }}
+          rhythmActive={rhythmSession !== null}
+          onRhythmStart={setRhythmSession}
+          onRhythmStop={() => setRhythmSession(null)}
           lastPluck={lastPluck}
           activeTuning={effectiveTuning}
           onSelectTuning={(tuning) => {
@@ -200,7 +212,8 @@ export default function App() {
           <img src={publicImage('washitsu-wide.webp')} alt="" className="w-full h-full object-cover opacity-60" />
         </picture>
         <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-stone-950/70 via-stone-950/30 to-stone-950/80" />
-        {view3d ? (
+        {/* リズム練習は2Dの箏の上で行う */}
+        {view3d && !rhythmSession ? (
           <Suspense
             fallback={
               <div className="text-sm text-amber-200/80 font-serif-jp animate-pulse">3Dの箏を準備しています…</div>
@@ -224,6 +237,21 @@ export default function App() {
             currentTechnique={currentTechnique}
             visualSettings={visualSettings}
             onStringPlucked={handleStringPlucked}
+            renderOverlay={
+              rhythmSession
+                ? (boardRef) => (
+                    <RhythmOverlay
+                      session={rhythmSession}
+                      boardRef={boardRef}
+                      orientation={orientation}
+                      tuning={effectiveTuning}
+                      labelMode={labelMode}
+                      lastPluck={lastPluck}
+                      onExit={() => setRhythmSession(null)}
+                    />
+                  )
+                : undefined
+            }
           />
         )}
       </main>
