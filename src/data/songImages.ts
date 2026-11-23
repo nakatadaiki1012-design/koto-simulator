@@ -9,6 +9,7 @@ const SONG_IMAGE_FILES: Record<string, string> = {
   kojo: 'kojo.webp',
   chidori: 'chidori.webp',
   harunoumi: 'harunoumi.webp',
+  rokudan: 'rokudan.webp',
 };
 
 /** public フォルダの画像のURL（公開先の場所が変わっても動くように BASE_URL を付ける） */
