@@ -20,6 +20,7 @@ import {
   DEFAULT_VISUAL_SETTINGS,
 } from './types/koto';
 import { HIRAJOSHI, applyOctaveUp } from './data/tunings';
+import { publicImage } from './data/songImages';
 
 // 3D表示は使うときだけ読み込む（ふだんの表示を重くしないため）
 const Koto3DView = lazy(() => import('./components/Koto3DView'));
@@ -192,7 +193,13 @@ export default function App() {
       )}
 
       {/* 4. Main Musical Instrument Stage */}
-      <main className="relative flex-1 w-full h-full min-h-0 flex items-center justify-center p-1 sm:p-3 overflow-hidden">
+      <main className="relative isolate flex-1 w-full h-full min-h-0 flex items-center justify-center p-1 sm:p-3 overflow-hidden">
+        {/* 楽器の後ろの和室の背景（横長の画面と縦長の画面で絵を変える）。楽器が見やすいよう暗めに重ねる */}
+        <picture className="pointer-events-none absolute inset-0 -z-10">
+          <source media="(orientation: portrait)" srcSet={publicImage('washitsu-tall.webp')} />
+          <img src={publicImage('washitsu-wide.webp')} alt="" className="w-full h-full object-cover opacity-60" />
+        </picture>
+        <div className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-stone-950/70 via-stone-950/30 to-stone-950/80" />
         {view3d ? (
           <Suspense
             fallback={

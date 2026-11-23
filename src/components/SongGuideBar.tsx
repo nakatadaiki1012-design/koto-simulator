@@ -8,6 +8,9 @@ import { soundEngine } from '../utils/soundEngine';
 import { REST_STRING_ID } from '../utils/songText';
 import { TatefuView } from './TatefuView';
 import { SongImportModal } from './SongImportModal';
+import { SongPickerModal } from './SongPickerModal';
+import { CompletionCelebration } from './CompletionCelebration';
+import { songImage } from '../data/songImages';
 
 /** 弦を弾いたことを知らせる情報。seq は弾くたびに1ずつ増える（同じ弦を続けて弾いても区別できる） */
 export interface PluckSignal {
@@ -53,6 +56,9 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
   const [selectedSongIndex, setSelectedSongIndex] = useState<number>(0);
   const currentSong = songs[selectedSongIndex] ?? songs[0];
   const [isImportOpen, setIsImportOpen] = useState(false);
+  const [isPickerOpen, setIsPickerOpen] = useState(false);
+  // 曲を最後まで自分で弾けたら、お祝い画面を出す
+  const [isCelebrating, setIsCelebrating] = useState(false);
 
   // 縦譜を表示するか（画面が低いスマホ横向きでは最初は閉じておく） ／ 次に弾く弦を光らせるか（慣れたら消して縦譜だけで弾く）
   const [showTatefu, setShowTatefuState] = useState<boolean>(() => loadFlag('koto_show_tatefu', typeof window === 'undefined' || window.innerHeight >= 600));
@@ -91,12 +97,12 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
     };
   }, [onTargetStringChange]);
 
-  // 休みの音は飛ばして、次に弾く音の番号を求める
+  // 休みの音は飛ばして、次に弾く音の番号を求める（もう弾く音がなければ -1）
   const nextPlayableIndex = useCallback(
     (from: number) => {
       let i = from;
       while (i < currentSong.notes.length && currentSong.notes[i].stringId === REST_STRING_ID) i++;
-      return i < currentSong.notes.length ? i : 0;
+      return i < currentSong.notes.length ? i : -1;
     },
     [currentSong]
   );
@@ -107,10 +113,15 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
   useEffect(() => {
     if (!lastPluck || lastPluck.seq === handledPluckSeq.current) return;
     handledPluckSeq.current = lastPluck.seq;
-    if (!isPlayingAuto && currentNote && lastPluck.stringId === currentNote.stringId) {
-      setCurrentNoteIndex(nextPlayableIndex(currentNoteIndex + 1));
+    if (!isPlayingAuto && !isCelebrating && currentNote && lastPluck.stringId === currentNote.stringId) {
+      const next = nextPlayableIndex(currentNoteIndex + 1);
+      if (next === -1) {
+        setIsCelebrating(true); // 最後の音まで弾けた！
+      } else {
+        setCurrentNoteIndex(next);
+      }
     }
-  }, [lastPluck, currentNote, currentNoteIndex, isPlayingAuto, nextPlayableIndex]);
+  }, [lastPluck, currentNote, currentNoteIndex, isPlayingAuto, isCelebrating, nextPlayableIndex]);
 
   // Auto-play routine
   const playNextAutoNote = useCallback(
@@ -239,18 +250,15 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
         {/* Left: Song selection & metadata */}
         <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
           <div className="flex items-center gap-1.5 text-rose-400">
-            <Music2 className="w-4 h-4 shrink-0" />
-            <select
-              value={selectedSongIndex}
-              onChange={(e) => handleSongChange(parseInt(e.target.value, 10))}
-              className="bg-stone-950 border border-stone-800 rounded px-2 py-1 text-xs text-rose-200 font-serif-jp cursor-pointer focus:outline-none focus:border-rose-500"
+            <button
+              onClick={() => setIsPickerOpen(true)}
+              className="flex items-center gap-2 pl-1 pr-2.5 py-1 bg-stone-950 border border-stone-800 rounded-lg hover:border-rose-500 transition-colors"
+              title="曲を選ぶ"
             >
-              {songs.map((s, idx) => (
-                <option key={s.id} value={idx}>
-                  {s.title} ({s.difficulty}・{s.tuningName})
-                </option>
-              ))}
-            </select>
+              <img src={songImage(currentSong)} alt="" className="w-7 h-7 rounded object-cover" />
+              <span className="text-xs text-rose-200 font-serif-jp">{currentSong.title}</span>
+              <span className="text-[10px] text-stone-500">▼</span>
+            </button>
           </div>
 
           {/* Difficulty Badge */}
@@ -406,6 +414,29 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
         <div className="max-w-7xl mx-auto mt-2">
           <TatefuView song={currentSong} currentNoteIndex={currentNoteIndex} onSelectNote={handleSelectNote} />
         </div>
+      )}
+
+      {isPickerOpen && (
+        <SongPickerModal
+          songs={songs}
+          selectedIndex={selectedSongIndex}
+          onSelect={(idx) => handleSongChange(idx)}
+          onClose={() => setIsPickerOpen(false)}
+        />
+      )}
+
+      {isCelebrating && (
+        <CompletionCelebration
+          songTitle={currentSong.title}
+          onRetry={() => {
+            setIsCelebrating(false);
+            setCurrentNoteIndex(Math.max(0, nextPlayableIndex(0)));
+          }}
+          onClose={() => {
+            setIsCelebrating(false);
+            setCurrentNoteIndex(Math.max(0, nextPlayableIndex(0)));
+          }}
+        />
       )}
 
       {isImportOpen && (
