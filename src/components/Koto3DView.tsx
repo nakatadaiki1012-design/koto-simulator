@@ -41,22 +41,49 @@ const stringX = (index: number) => -10.2 + index * (20.4 / 12); // 一（奥）�
 // 琴柱の位置：bridgePositionPercent は 竜角=100%、雲角=0%
 const jiZOf = (percent: number) => Z_KUMOKAKU + (Z_RYUKAKU - Z_KUMOKAKU) * (percent / 100);
 
-type ViewPreset = 'diagonal' | 'player' | 'side' | 'top';
+type ViewPreset = 'play' | 'diagonal' | 'player' | 'side' | 'top';
 /**
  * 視点：dir＝カメラの向き（注視点からカメラへの方向）、span＝画面の横幅に収める長さ(cm)
  * 距離は画面の縦横比に合わせて自動で計算する（スマホでもPCでも箏が画面いっぱいに映る）
  */
 const VIEW_PRESETS: Record<ViewPreset, { label: string; dir: [number, number, number]; target: [number, number, number]; span: number }> = {
+  // 最初の視点：真上から、弾く部分（竜角〜琴柱）を画面いっぱいに映す（向きと距離は presetPose で決める）
+  play: { label: '弾く', dir: [0, 1, 0], target: [0, 5, 0], span: 0 },
   diagonal: { label: '斜め', dir: [0.62, 0.55, 0.56], target: [0, 4, -2], span: 205 },
   player: { label: '奏者', dir: [0.78, 0.66, -0.42], target: [0, 5, -64], span: 150 },
   side: { label: '横', dir: [1, 0.28, 0.02], target: [0, 5, 0], span: 196 },
   top: { label: '真上', dir: [0.001, 1, 0], target: [0, 0, 0], span: 200 },
 };
 
+// 「弾く」視点で映す範囲：竜角の外の名札から、いちばん奥の琴柱の少し先まで（長さ方向）と、名札の幅（横方向）
+const PLAY_Z_MIN = Z_HEAD - 20;
+const PLAY_Z_MAX = 44;
+const PLAY_HALF_WIDTH = 27;
+
 function presetPose(v: ViewPreset, camera: THREE.PerspectiveCamera) {
   const pr = VIEW_PRESETS[v];
   const vfov = (camera.fov * Math.PI) / 180;
   const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
+  if (v === 'play') {
+    // 横長の画面：箏の長さを横に（竜角が右、一が上）。2Dの横置きと同じ並び
+    // 縦長の画面：箏の長さを縦に（竜角と名札が上、一が左）。2Dの縦置きと同じ並び
+    const portrait = camera.aspect < 1;
+    const len = PLAY_Z_MAX - PLAY_Z_MIN;
+    const tanAlong = Math.tan((portrait ? vfov : hfov) / 2);
+    const tanAcross = Math.tan((portrait ? hfov : vfov) / 2);
+    // まず箏の幅（名札まで）が画面いっぱいになる距離にする
+    let dist = Math.max(55, (PLAY_HALF_WIDTH / tanAcross) * 1.02);
+    // そのとき見える長さ。弾く範囲より長く見えるなら、範囲がちょうど収まる距離まで寄る
+    let visible = 2 * dist * tanAlong;
+    if (visible > len) {
+      dist = Math.max(55, (len / 2 / tanAlong) * 1.02);
+      visible = len;
+    }
+    // 竜角側（名札）を画面の端にそろえ、そこから見えるところまで映す
+    const target = new THREE.Vector3(0, 5, PLAY_Z_MIN + Math.min(visible, len) / 2);
+    const dir = portrait ? new THREE.Vector3(0, 1, 0.0015) : new THREE.Vector3(0.0015, 1, 0);
+    return { pos: target.clone().addScaledVector(dir.normalize(), dist), target };
+  }
   // 真上と横は箏の長さが画面の横方向、縦長画面では縦方向にも収まるようにする
   const fitH = pr.span / 2 / Math.tan(hfov / 2);
   const fitV = (v === 'top' || v === 'side' ? 40 : pr.span * 0.55) / 2 / Math.tan(vfov / 2);
@@ -261,8 +288,8 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
   const controlsRef = useRef<OrbitControls | null>(null);
   const cameraRef = useRef<THREE.PerspectiveCamera | null>(null);
   const tweenRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; start: number } | null>(null);
-  const [view, setView] = useState<ViewPreset>('diagonal');
-  const viewRef = useRef<ViewPreset>('diagonal');
+  const [view, setView] = useState<ViewPreset>('play');
+  const viewRef = useRef<ViewPreset>('play');
   const userMovedRef = useRef<boolean>(false);
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [webglError, setWebglError] = useState<boolean>(false);
@@ -735,7 +762,7 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
         </button>
       </div>
 
-      <div className="absolute right-2 top-2 sm:right-3 sm:top-3 z-10 pointer-events-none text-[10px] sm:text-[11px] text-stone-400 font-serif-jp bg-stone-950/70 rounded-md px-2 py-1 text-right leading-relaxed">
+      <div className="hidden sm:block absolute left-3 top-3 z-10 pointer-events-none text-[10px] sm:text-[11px] text-stone-400 font-serif-jp bg-stone-950/70 rounded-md px-2 py-1 text-right leading-relaxed">
         弦をタップで演奏
         <br className="sm:hidden" />
         <span className="hidden sm:inline">　／　</span>ドラッグで回転・ピンチで拡大
