@@ -217,6 +217,27 @@ export const Header: React.FC<HeaderProps> = ({
 
         {/* Zone 2: Navigation controls & educational toggles */}
         <div className="koto-header-tools flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+          {/* 小さい画面ではメニューの中に「表示の設定」「使い方」を入れる */}
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              onOpenVisualSettingsModal();
+            }}
+            className="koto-compact-only items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border bg-stone-900 border-stone-800 text-stone-200"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+            <span>表示の設定</span>
+          </button>
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              onOpenTuningModal();
+            }}
+            className="koto-compact-only items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border bg-stone-900 border-stone-800 text-stone-200"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+            <span>使い方・解説</span>
+          </button>
           {/* Tuning Selector (調弦切替: 平調子・雲井・乃木・中空・古今・雅楽) */}
           <div className="flex items-center gap-1 bg-stone-900 border border-amber-900/60 rounded-lg px-2 py-1 text-xs">
             <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -477,7 +498,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Visual Feedback Settings (低スペック・省電力最適化) */}
           <button
             onClick={onOpenVisualSettingsModal}
-            className="p-1 text-stone-400 hover:text-amber-300 transition-colors"
+            className="koto-wide-only p-1 text-stone-400 hover:text-amber-300 transition-colors"
             title="描画・視覚演出設定（弦の振動・発光強度・琴柱表示）"
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -485,7 +506,7 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onOpenTuningModal}
-            className="p-1 text-stone-400 hover:text-amber-300 transition-colors"
+            className="koto-wide-only p-1 text-stone-400 hover:text-amber-300 transition-colors"
             title="調弦・特殊奏法・箏の解説"
           >
             <HelpCircle className="w-4 h-4" />
