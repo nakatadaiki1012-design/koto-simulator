@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Box, Volume2, VolumeX, Sparkles, Music, HelpCircle, Layers, Disc, Square, Wind, SlidersHorizontal, ArrowUp, ArrowDown } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Box, Volume2, VolumeX, Sparkles, Music, HelpCircle, Layers, Disc, Square, Wind, SlidersHorizontal, ArrowUp, ArrowDown, Menu, X } from 'lucide-react';
 import { LabelMode, KotoTuning } from '../types/koto';
 import { soundEngine, RecordingResult, KotoStringType } from '../utils/soundEngine';
 import { ReverbEnvironment, REVERB_ENVIRONMENTS } from '../utils/reverb';
@@ -49,6 +50,8 @@ export const Header: React.FC<HeaderProps> = ({
   onOpenVisualSettingsModal,
 }) => {
   const [volume, setVolume] = useState<number>(0.6);
+  // スマホなど小さい画面で、しまってあるボタンを開いているか
+  const [menuOpen, setMenuOpen] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isGlissandoPlaying, setIsGlissandoPlaying] = useState<boolean>(false);
   const [audioReady, setAudioReady] = useState<boolean>(soundEngine.isReady());
@@ -164,7 +167,13 @@ export const Header: React.FC<HeaderProps> = ({
   };
 
   return (
-    <header className="koto-header shrink-0 w-full bg-stone-950/90 backdrop-blur-md border-b border-amber-950/50 px-3 sm:px-6 py-2 z-40 select-none">
+    <header className={`koto-header ${menuOpen ? 'menu-open' : ''} relative shrink-0 w-full bg-stone-950/90 backdrop-blur-md border-b border-amber-950/50 px-3 sm:px-6 py-2 z-40 select-none`}>
+      {/* メニューを開いているとき、外側をタップしたら閉じる */}
+      {menuOpen &&
+        createPortal(
+          <div className="koto-compact-only fixed inset-0 z-[35]" onClick={() => setMenuOpen(false)} />,
+          document.body
+        )}
       <div className="koto-header-row max-w-7xl mx-auto flex items-center justify-between gap-2 sm:gap-4 flex-wrap">
         {/* Zone 1: Wordmark & Tuning Name */}
         <div className="flex items-center gap-3 shrink-0">
@@ -191,10 +200,44 @@ export const Header: React.FC<HeaderProps> = ({
               ● 発音可能
             </span>
           )}
+
+          {/* 小さい画面用：曲の練習ボタン（よく使うので、メニューにしまわず外に出す） */}
+          <button
+            onClick={() => setSongGuideActive(!songGuideActive)}
+            className={`koto-compact-only items-center gap-1 px-2 py-1 text-xs rounded-lg border whitespace-nowrap ${
+              songGuideActive
+                ? 'bg-rose-950/70 border-rose-500 text-rose-200'
+                : 'bg-stone-900 border-stone-800 text-stone-300'
+            }`}
+          >
+            <Music className="w-3.5 h-3.5 text-rose-400" />
+            <span>曲の練習</span>
+          </button>
         </div>
 
         {/* Zone 2: Navigation controls & educational toggles */}
         <div className="koto-header-tools flex items-center gap-1.5 sm:gap-2.5 flex-wrap">
+          {/* 小さい画面ではメニューの中に「表示の設定」「使い方」を入れる */}
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              onOpenVisualSettingsModal();
+            }}
+            className="koto-compact-only items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border bg-stone-900 border-stone-800 text-stone-200"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400" />
+            <span>表示の設定</span>
+          </button>
+          <button
+            onClick={() => {
+              setMenuOpen(false);
+              onOpenTuningModal();
+            }}
+            className="koto-compact-only items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border bg-stone-900 border-stone-800 text-stone-200"
+          >
+            <HelpCircle className="w-3.5 h-3.5 text-amber-400" />
+            <span>使い方・解説</span>
+          </button>
           {/* Tuning Selector (調弦切替: 平調子・雲井・乃木・中空・古今・雅楽) */}
           <div className="flex items-center gap-1 bg-stone-900 border border-amber-900/60 rounded-lg px-2 py-1 text-xs">
             <SlidersHorizontal className="w-3.5 h-3.5 text-amber-400 shrink-0" />
@@ -358,7 +401,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* 曲の練習（ガイド・縦譜）の切り替え */}
           <button
             onClick={() => setSongGuideActive(!songGuideActive)}
-            className={`flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border transition-all whitespace-nowrap ${
+            className={`koto-wide-only flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-lg border transition-all whitespace-nowrap ${
               songGuideActive
                 ? 'bg-rose-950/70 border-rose-500 text-rose-200 shadow-sm'
                 : 'bg-stone-900 border-stone-800 text-stone-300 hover:border-stone-700'
@@ -447,7 +490,7 @@ export const Header: React.FC<HeaderProps> = ({
               step="0.02"
               value={isMuted ? 0 : volume}
               onChange={handleVolumeChange}
-              className="w-16 sm:w-20 h-1.5 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
+              className="koto-wide-only w-16 sm:w-20 h-1.5 bg-stone-800 rounded-lg appearance-none cursor-pointer accent-amber-500"
               title="主音量（Master Volume）"
             />
           </div>
@@ -455,7 +498,7 @@ export const Header: React.FC<HeaderProps> = ({
           {/* Visual Feedback Settings (低スペック・省電力最適化) */}
           <button
             onClick={onOpenVisualSettingsModal}
-            className="p-1 text-stone-400 hover:text-amber-300 transition-colors"
+            className="koto-wide-only p-1 text-stone-400 hover:text-amber-300 transition-colors"
             title="描画・視覚演出設定（弦の振動・発光強度・琴柱表示）"
           >
             <SlidersHorizontal className="w-4 h-4" />
@@ -463,10 +506,23 @@ export const Header: React.FC<HeaderProps> = ({
 
           <button
             onClick={onOpenTuningModal}
-            className="p-1 text-stone-400 hover:text-amber-300 transition-colors"
+            className="koto-wide-only p-1 text-stone-400 hover:text-amber-300 transition-colors"
             title="調弦・特殊奏法・箏の解説"
           >
             <HelpCircle className="w-4 h-4" />
+          </button>
+
+          {/* 小さい画面用：しまってあるボタン（調弦・表示・録音など）を開く */}
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            aria-expanded={menuOpen}
+            className={`koto-compact-only items-center gap-1 px-2 py-1 rounded-lg border text-xs ${
+              menuOpen ? 'bg-amber-600 border-amber-500 text-stone-950 font-bold' : 'bg-stone-900 border-stone-800 text-stone-200'
+            }`}
+            title="そのほかの設定"
+          >
+            {menuOpen ? <X className="w-4 h-4" /> : <Menu className="w-4 h-4" />}
+            <span className="hidden min-[420px]:inline">メニュー</span>
           </button>
         </div>
       </div>

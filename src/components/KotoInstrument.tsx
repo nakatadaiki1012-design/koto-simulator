@@ -13,6 +13,8 @@ interface KotoInstrumentProps {
   currentTechnique: PlayingTechnique;
   visualSettings?: VisualSettings;
   onStringPlucked?: (stringId: number) => void;
+  /** 箏の上に重ねて表示するもの（リズム練習の流れてくる音符など） */
+  renderOverlay?: (boardRef: React.RefObject<HTMLDivElement | null>) => React.ReactNode;
 }
 
 export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
@@ -24,6 +26,7 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
   currentTechnique,
   visualSettings,
   onStringPlucked,
+  renderOverlay,
 }) => {
   const [activeStrings, setActiveStrings] = useState<Set<number>>(new Set());
   const stringElementsRef = useRef<Map<number, HTMLElement>>(new Map());
@@ -269,6 +272,8 @@ export const KotoInstrument: React.FC<KotoInstrumentProps> = ({
             </div>
           ))}
         </div>
+
+        {renderOverlay?.(boardRef)}
       </div>
 
     </div>

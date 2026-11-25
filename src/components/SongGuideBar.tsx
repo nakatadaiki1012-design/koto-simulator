@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Play, Pause, RotateCcw, ChevronRight, ChevronLeft, X, Music2, SlidersHorizontal, ScrollText, Lightbulb, FilePlus2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, ChevronRight, ChevronLeft, X, Music2, SlidersHorizontal, ScrollText, Lightbulb, FilePlus2, Square, Volume2, VolumeX } from 'lucide-react';
 import { Song, SongNote, LabelMode, KotoTuning } from '../types/koto';
 import { ALL_PRACTICE_SONGS } from '../data/songs';
 import { ALL_TUNINGS } from '../data/tunings';
@@ -11,6 +11,7 @@ import { SongImportModal } from './SongImportModal';
 import { SongPickerModal } from './SongPickerModal';
 import { CompletionCelebration } from './CompletionCelebration';
 import { songImage } from '../data/songImages';
+import type { RhythmSession } from './RhythmOverlay';
 
 /** 弦を弾いたことを知らせる情報。seq は弾くたびに1ずつ増える（同じ弦を続けて弾いても区別できる） */
 export interface PluckSignal {
@@ -40,7 +41,18 @@ interface SongGuideBarProps {
   lastPluck: PluckSignal | null;
   activeTuning: KotoTuning;
   onSelectTuning: (tuning: KotoTuning) => void;
+  /** リズム練習を始める／やめる（音符を箏の上に流すのは App 側） */
+  rhythmActive: boolean;
+  onRhythmStart: (session: RhythmSession) => void;
+  onRhythmStop: () => void;
 }
+
+type PracticeMode = 'guide' | 'rhythm';
+const SPEEDS = [
+  { value: 0.5, label: 'ゆっくり' },
+  { value: 0.75, label: 'すこしゆっくり' },
+  { value: 1, label: 'ふつう' },
+];
 
 export const SongGuideBar: React.FC<SongGuideBarProps> = ({
   labelMode,
@@ -49,6 +61,9 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
   lastPluck,
   activeTuning,
   onSelectTuning,
+  rhythmActive,
+  onRhythmStart,
+  onRhythmStop,
 }) => {
   // 収録曲 ＋ 自分で追加した曲
   const [customSongs, setCustomSongs] = useState<Song[]>(() => loadCustomSongs());
@@ -59,6 +74,25 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
   const [isPickerOpen, setIsPickerOpen] = useState(false);
   // 曲を最後まで自分で弾けたら、お祝い画面を出す
   const [isCelebrating, setIsCelebrating] = useState(false);
+
+  // 練習のしかた：ガイド（1音ずつ）／リズム（太鼓の達人のように音符が流れてくる）
+  const [mode, setModeState] = useState<PracticeMode>(() => {
+    try {
+      return localStorage.getItem('koto_practice_mode') === 'rhythm' ? 'rhythm' : 'guide';
+    } catch {
+      return 'guide';
+    }
+  });
+  const setMode = (m: PracticeMode) => {
+    setModeState(m);
+    try {
+      localStorage.setItem('koto_practice_mode', m);
+    } catch {}
+    onRhythmStop();
+    handleReset();
+  };
+  const [speed, setSpeed] = useState<number>(0.75);
+  const [guideSound, setGuideSound] = useState<boolean>(false);
 
   // 縦譜を表示するか（画面が低いスマホ横向きでは最初は閉じておく） ／ 次に弾く弦を光らせるか（慣れたら消して縦譜だけで弾く）
   const [showTatefu, setShowTatefuState] = useState<boolean>(() => loadFlag('koto_show_tatefu', typeof window === 'undefined' || window.innerHeight >= 600));
@@ -80,12 +114,12 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
 
   // 次に弾く弦を楽器の上で光らせる（休みの音や、光をオフにしたときは光らせない）
   useEffect(() => {
-    if (currentNote && highlightString && currentNote.stringId !== REST_STRING_ID) {
+    if (mode === 'guide' && currentNote && highlightString && currentNote.stringId !== REST_STRING_ID) {
       onTargetStringChange(currentNote.stringId);
     } else {
       onTargetStringChange(null);
     }
-  }, [currentNote, highlightString, onTargetStringChange]);
+  }, [mode, currentNote, highlightString, onTargetStringChange]);
 
   // Clean up when unmounting
   useEffect(() => {
@@ -113,7 +147,7 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
   useEffect(() => {
     if (!lastPluck || lastPluck.seq === handledPluckSeq.current) return;
     handledPluckSeq.current = lastPluck.seq;
-    if (!isPlayingAuto && !isCelebrating && currentNote && lastPluck.stringId === currentNote.stringId) {
+    if (mode === 'guide' && !isPlayingAuto && !isCelebrating && currentNote && lastPluck.stringId === currentNote.stringId) {
       const next = nextPlayableIndex(currentNoteIndex + 1);
       if (next === -1) {
         setIsCelebrating(true); // 最後の音まで弾けた！
@@ -121,7 +155,7 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
         setCurrentNoteIndex(next);
       }
     }
-  }, [lastPluck, currentNote, currentNoteIndex, isPlayingAuto, isCelebrating, nextPlayableIndex]);
+  }, [mode, lastPluck, currentNote, currentNoteIndex, isPlayingAuto, isCelebrating, nextPlayableIndex]);
 
   // Auto-play routine
   const playNextAutoNote = useCallback(
@@ -190,6 +224,7 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
 
   const handleSongChange = (idx: number, list: Song[] = songs) => {
     handleReset();
+    onRhythmStop();
     setSelectedSongIndex(idx);
     const newSong = list[idx];
     if (!newSong) return;
@@ -261,8 +296,28 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
             </button>
           </div>
 
+          {/* 練習のしかたの切り替え */}
+          <div className="flex items-center p-0.5 bg-stone-950 border border-stone-800 rounded-lg text-xs shrink-0" role="group" aria-label="練習のしかた">
+            <button
+              onClick={() => setMode('guide')}
+              aria-pressed={mode === 'guide'}
+              className={`px-2 py-0.5 rounded font-serif-jp ${mode === 'guide' ? 'bg-rose-600 text-white font-bold' : 'text-stone-400 hover:text-stone-200'}`}
+              title="次に弾く弦が光り、1音ずつ自分のペースで進みます"
+            >
+              ガイド
+            </button>
+            <button
+              onClick={() => setMode('rhythm')}
+              aria-pressed={mode === 'rhythm'}
+              className={`px-2 py-0.5 rounded font-serif-jp ${mode === 'rhythm' ? 'bg-rose-600 text-white font-bold' : 'text-stone-400 hover:text-stone-200'}`}
+              title="太鼓の達人のように、弦の上を音符が流れてきます。的に来たときに弾きます"
+            >
+              リズム
+            </button>
+          </div>
+
           {/* Difficulty Badge */}
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-rose-950/70 text-rose-300 border border-rose-800/60 font-serif-jp shrink-0">
+          <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded bg-rose-950/70 text-rose-300 border border-rose-800/60 font-serif-jp shrink-0">
             {currentSong.difficulty}
           </span>
 
@@ -282,7 +337,7 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
           )}
 
           {/* Current Section & Lyric Display */}
-          {currentNote?.section && (
+          {mode === 'guide' && currentNote?.section && (
             <span className="text-xs text-stone-400 font-serif-jp hidden md:inline">
               {currentNote.section}
             </span>
@@ -290,6 +345,7 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
         </div>
 
         {/* Center: Current Note Target Display */}
+        {mode === 'guide' && (
         <div className="flex items-center gap-2">
           <span className="text-xs text-stone-400 hidden sm:inline">次の弦:</span>
           {currentNote ? (
@@ -325,8 +381,63 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
           </span>
         </div>
 
+        )}
+
         {/* Right: Practice Playback Controls */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
+          {mode === 'rhythm' ? (
+            <>
+              <select
+                value={speed}
+                onChange={(e) => {
+                  setSpeed(parseFloat(e.target.value));
+                  onRhythmStop();
+                }}
+                className="bg-stone-950 border border-stone-700 rounded px-1.5 py-1 text-xs font-serif-jp text-stone-200 focus:outline-none focus:border-rose-500"
+                title="音符が流れてくる速さ"
+              >
+                {SPEEDS.map((sp) => (
+                  <option key={sp.value} value={sp.value}>
+                    {sp.label}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={() => {
+                  setGuideSound(!guideSound);
+                  onRhythmStop();
+                }}
+                className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-serif-jp transition-colors ${
+                  guideSound ? 'bg-amber-200 text-stone-900' : 'bg-stone-800 text-stone-400 hover:text-white'
+                }`}
+                title="的に来たときに、お手本の音を小さく鳴らします（リズムをつかむまで便利）"
+              >
+                {guideSound ? <Volume2 className="w-3.5 h-3.5" /> : <VolumeX className="w-3.5 h-3.5" />}
+                <span>お手本の音</span>
+              </button>
+              {rhythmActive ? (
+                <button
+                  onClick={onRhythmStop}
+                  className="flex items-center gap-1 px-3 py-1 rounded text-xs font-bold bg-amber-500 text-stone-950 hover:bg-amber-400"
+                >
+                  <Square className="w-3.5 h-3.5 fill-current" />
+                  <span>やめる</span>
+                </button>
+              ) : (
+                <button
+                  onClick={() => {
+                    soundEngine.init();
+                    onRhythmStart({ song: currentSong, speed, guideSound });
+                  }}
+                  className="flex items-center gap-1 px-3 py-1 rounded text-xs font-bold bg-rose-600 text-white hover:bg-rose-500 shadow-sm"
+                >
+                  <Play className="w-3.5 h-3.5 fill-current" />
+                  <span>スタート</span>
+                </button>
+              )}
+            </>
+          ) : (
+            <>
           <button
             onClick={() => setShowTatefu(!showTatefu)}
             className={`flex items-center gap-1 px-2 py-1 rounded text-xs font-serif-jp transition-colors ${
@@ -399,6 +510,8 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
           >
             <RotateCcw className="w-4 h-4" />
           </button>
+            </>
+          )}
 
           <button
             onClick={onClose}
@@ -410,7 +523,7 @@ export const SongGuideBar: React.FC<SongGuideBarProps> = ({
         </div>
       </div>
 
-      {showTatefu && (
+      {mode === 'guide' && showTatefu && (
         <div className="max-w-7xl mx-auto mt-2">
           <TatefuView song={currentSong} currentNoteIndex={currentNoteIndex} onSelectNote={handleSelectNote} />
         </div>
