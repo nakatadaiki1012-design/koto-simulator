@@ -151,7 +151,7 @@ export default function App() {
   };
 
   return (
-    <div className="koto-stage relative w-screen h-screen flex flex-col bg-stone-950 text-stone-100 overflow-hidden select-none">
+    <div style={{ height: '100dvh' }} className="koto-stage relative w-screen h-screen flex flex-col bg-stone-950 text-stone-100 overflow-hidden select-none">
       {/* 1. Header Bar */}
       <Header
         labelMode={labelMode}
