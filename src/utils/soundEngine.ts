@@ -83,141 +83,156 @@ class KotoSoundEngine {
     // Lazy initialization on user interaction
   }
 
-  public async init(): Promise<boolean> {
-    if (this.initialized && this.ctx && this.ctx.state === 'running') {
-      return true;
-    }
+  // 準備の途中で何度呼ばれても、同じ準備を1回だけ行う
+  private initPromise: Promise<boolean> | null = null;
 
+  public init(): Promise<boolean> {
+    if (this.initialized && this.ctx && this.ctx.state === 'running') {
+      return Promise.resolve(true);
+    }
+    if (this.initPromise) return this.initPromise;
+    this.initPromise = this.initInternal().finally(() => {
+      this.initPromise = null;
+    });
+    return this.initPromise;
+  }
+
+  private async initInternal(): Promise<boolean> {
     try {
       const AudioCtx =
         window.AudioContext ||
         (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
-      if (!this.ctx) {
+      if (!this.ctx || this.ctx.state === 'closed') {
         this.ctx = new AudioCtx({ latencyHint: 'interactive' });
+        this.initialized = false;
       }
 
-      // Unlock Web Audio for iOS Silent Mode & Earphones
-      await unlockWebAudio(this.ctx);
+      // 音の配線は「待たずに、すぐ」作る。
+      // （以前は音声の制限解除が終わるまで待っていたため、最初のタップの音が鳴らないことがあった）
+      if (!this.initialized) this.buildGraph();
+
+      // スマホの音声制限の解除（無音を一瞬鳴らす）。タップの直後に始めるが、終わるのは待たない
+      void unlockWebAudio(this.ctx);
 
       const state = this.ctx.state as string;
       if (state === 'suspended' || state === 'interrupted') {
         try {
-          await this.ctx.resume();
+          // 再開を待つ（端末によっては返事が来ないことがあるので、長くは待たない）
+          await Promise.race([this.ctx.resume(), new Promise((r) => setTimeout(r, 1500))]);
         } catch {
-          // Will retry on user gesture
+          // 次にタップしたときにもう一度試す
         }
       }
-
-      // 既に音の配線が出来ている場合は作り直さない（二重配線で音が重なる・割れるのを防ぐ）
-      if (this.initialized && this.masterGain && this.compressor) {
-        return (this.ctx.state as string) === 'running';
-      }
-
-      // Listen for output device change (e.g. plugging in or connecting Bluetooth earphones)
-      if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
-        navigator.mediaDevices.ondevicechange = async () => {
-          if (this.ctx) {
-            const s = this.ctx.state as string;
-            if (s === 'suspended' || s === 'interrupted') {
-              try {
-                await this.ctx.resume();
-              } catch {}
-            }
-            // Clear impulse cache if sample rate changed on headphone connection
-            this.impulseCache.clear();
-            this.loadReverbImpulse(this.reverbEnvironment);
-          }
-        };
-      }
-
-      // Master output gain
-      this.masterGain = this.ctx.createGain();
-      this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.volumeToGain(this.volume), this.ctx.currentTime);
-
-      // 最終リミッター：大きい音量でもピークを抑えて音割れを防ぐ
-      this.limiter = this.ctx.createDynamicsCompressor();
-      this.limiter.threshold.setValueAtTime(-4, this.ctx.currentTime);
-      this.limiter.knee.setValueAtTime(2, this.ctx.currentTime);
-      this.limiter.ratio.setValueAtTime(20, this.ctx.currentTime);
-      this.limiter.attack.setValueAtTime(0.001, this.ctx.currentTime);
-      this.limiter.release.setValueAtTime(0.12, this.ctx.currentTime);
-
-      // 念のための安全装置：それでも越えた瞬間の山だけをなめらかに丸める
-      const clipper = this.ctx.createWaveShaper();
-      const curve = new Float32Array(2048);
-      for (let i = 0; i < curve.length; i++) {
-        const x = (i / (curve.length - 1)) * 2 - 1;
-        curve[i] = Math.abs(x) < 0.8 ? x : Math.sign(x) * (0.8 + 0.18 * Math.tanh((Math.abs(x) - 0.8) / 0.18));
-      }
-      clipper.curve = curve;
-      clipper.oversample = '2x';
-      this.limiter.connect(clipper);
-      this.outputNode = clipper;
-
-      // Dynamics compressor: softened to preserve natural string attack transients and eliminate pumping
-      this.compressor = this.ctx.createDynamicsCompressor();
-      this.compressor.threshold.setValueAtTime(-6, this.ctx.currentTime);
-      this.compressor.knee.setValueAtTime(6, this.ctx.currentTime);
-      this.compressor.ratio.setValueAtTime(4, this.ctx.currentTime);
-      this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
-      this.compressor.release.setValueAtTime(0.10, this.ctx.currentTime);
-
-      // Dry / Wet Routing
-      const activeOpt = REVERB_ENVIRONMENTS.find((e) => e.id === this.reverbEnvironment);
-      const initialWet = activeOpt ? activeOpt.wetLevel : 0.08;
-
-      this.dryGain = this.ctx.createGain();
-      this.dryGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
-
-      this.wetGain = this.ctx.createGain();
-      this.wetGain.gain.setValueAtTime(initialWet, this.ctx.currentTime);
-
-      // Convolver node with selected acoustic environment
-      this.convolver = this.ctx.createConvolver();
-      this.reverbSendGain = this.ctx.createGain();
-      const sendVal = this.reverbEnvironment === 'off' ? 0.0 : 1.0;
-      this.reverbSendGain.gain.setValueAtTime(sendVal, this.ctx.currentTime);
-
-      // Abbey Road Reverb Filter: Cut sub/bass mud (<280Hz) and harsh top sizzle (>5200Hz)
-      this.reverbHighpass = this.ctx.createBiquadFilter();
-      this.reverbHighpass.type = 'highpass';
-      this.reverbHighpass.frequency.setValueAtTime(280, this.ctx.currentTime);
-
-      this.reverbLowpass = this.ctx.createBiquadFilter();
-      this.reverbLowpass.type = 'lowpass';
-      this.reverbLowpass.frequency.setValueAtTime(5200, this.ctx.currentTime);
-
-      this.loadReverbImpulse(this.reverbEnvironment);
-
-      this.compressor.connect(this.dryGain);
-      this.dryGain.connect(this.masterGain);
-
-      // Route through reverbSendGain -> Highpass -> Lowpass -> Convolver -> WetGain -> Master
-      this.compressor.connect(this.reverbSendGain);
-      this.reverbSendGain.connect(this.reverbHighpass);
-      this.reverbHighpass.connect(this.reverbLowpass);
-      this.reverbLowpass.connect(this.convolver);
-      this.convolver.connect(this.wetGain);
-      this.wetGain.connect(this.masterGain);
-
-      this.masterGain.connect(this.limiter);
-      this.outputNode.connect(this.ctx.destination);
-
-      // MediaStreamAudioDestinationNode for real-time recording
-      if (this.ctx.createMediaStreamDestination) {
-        this.mediaStreamDest = this.ctx.createMediaStreamDestination();
-        this.outputNode.connect(this.mediaStreamDest);
-      }
-
-      // Pre-warm zero-latency buffer cache for all strings of active tuning
-      this.warmupCache(this.activeTuning.strings);
-
-      this.initialized = true;
-      return true;
+      return (this.ctx.state as string) === 'running';
     } catch (err) {
       console.error('Failed to initialize AudioContext:', err);
       return false;
     }
+  }
+
+  /** 音の通り道（音量・響き・リミッターなど）を作る */
+  private buildGraph(): void {
+    if (!this.ctx) return;
+    // Listen for output device change (e.g. plugging in or connecting Bluetooth earphones)
+    if (typeof navigator !== 'undefined' && navigator.mediaDevices) {
+      navigator.mediaDevices.ondevicechange = async () => {
+        if (this.ctx) {
+          const s = this.ctx.state as string;
+          if (s === 'suspended' || s === 'interrupted') {
+            try {
+              await this.ctx.resume();
+            } catch {}
+          }
+          // Clear impulse cache if sample rate changed on headphone connection
+          this.impulseCache.clear();
+          this.loadReverbImpulse(this.reverbEnvironment);
+        }
+      };
+    }
+
+    // Master output gain
+    this.masterGain = this.ctx.createGain();
+    this.masterGain.gain.setValueAtTime(this.isMuted ? 0 : this.volumeToGain(this.volume), this.ctx.currentTime);
+
+    // 最終リミッター：大きい音量でもピークを抑えて音割れを防ぐ
+    this.limiter = this.ctx.createDynamicsCompressor();
+    this.limiter.threshold.setValueAtTime(-4, this.ctx.currentTime);
+    this.limiter.knee.setValueAtTime(2, this.ctx.currentTime);
+    this.limiter.ratio.setValueAtTime(20, this.ctx.currentTime);
+    this.limiter.attack.setValueAtTime(0.001, this.ctx.currentTime);
+    this.limiter.release.setValueAtTime(0.12, this.ctx.currentTime);
+
+    // 念のための安全装置：それでも越えた瞬間の山だけをなめらかに丸める
+    const clipper = this.ctx.createWaveShaper();
+    const curve = new Float32Array(2048);
+    for (let i = 0; i < curve.length; i++) {
+      const x = (i / (curve.length - 1)) * 2 - 1;
+      curve[i] = Math.abs(x) < 0.8 ? x : Math.sign(x) * (0.8 + 0.18 * Math.tanh((Math.abs(x) - 0.8) / 0.18));
+    }
+    clipper.curve = curve;
+    clipper.oversample = '2x';
+    this.limiter.connect(clipper);
+    this.outputNode = clipper;
+
+    // Dynamics compressor: softened to preserve natural string attack transients and eliminate pumping
+    this.compressor = this.ctx.createDynamicsCompressor();
+    this.compressor.threshold.setValueAtTime(-6, this.ctx.currentTime);
+    this.compressor.knee.setValueAtTime(6, this.ctx.currentTime);
+    this.compressor.ratio.setValueAtTime(4, this.ctx.currentTime);
+    this.compressor.attack.setValueAtTime(0.005, this.ctx.currentTime);
+    this.compressor.release.setValueAtTime(0.10, this.ctx.currentTime);
+
+    // Dry / Wet Routing
+    const activeOpt = REVERB_ENVIRONMENTS.find((e) => e.id === this.reverbEnvironment);
+    const initialWet = activeOpt ? activeOpt.wetLevel : 0.08;
+
+    this.dryGain = this.ctx.createGain();
+    this.dryGain.gain.setValueAtTime(1.0, this.ctx.currentTime);
+
+    this.wetGain = this.ctx.createGain();
+    this.wetGain.gain.setValueAtTime(initialWet, this.ctx.currentTime);
+
+    // Convolver node with selected acoustic environment
+    this.convolver = this.ctx.createConvolver();
+    this.reverbSendGain = this.ctx.createGain();
+    const sendVal = this.reverbEnvironment === 'off' ? 0.0 : 1.0;
+    this.reverbSendGain.gain.setValueAtTime(sendVal, this.ctx.currentTime);
+
+    // Abbey Road Reverb Filter: Cut sub/bass mud (<280Hz) and harsh top sizzle (>5200Hz)
+    this.reverbHighpass = this.ctx.createBiquadFilter();
+    this.reverbHighpass.type = 'highpass';
+    this.reverbHighpass.frequency.setValueAtTime(280, this.ctx.currentTime);
+
+    this.reverbLowpass = this.ctx.createBiquadFilter();
+    this.reverbLowpass.type = 'lowpass';
+    this.reverbLowpass.frequency.setValueAtTime(5200, this.ctx.currentTime);
+
+    this.loadReverbImpulse(this.reverbEnvironment);
+
+    this.compressor.connect(this.dryGain);
+    this.dryGain.connect(this.masterGain);
+
+    // Route through reverbSendGain -> Highpass -> Lowpass -> Convolver -> WetGain -> Master
+    this.compressor.connect(this.reverbSendGain);
+    this.reverbSendGain.connect(this.reverbHighpass);
+    this.reverbHighpass.connect(this.reverbLowpass);
+    this.reverbLowpass.connect(this.convolver);
+    this.convolver.connect(this.wetGain);
+    this.wetGain.connect(this.masterGain);
+
+    this.masterGain.connect(this.limiter);
+    this.outputNode.connect(this.ctx.destination);
+
+    // MediaStreamAudioDestinationNode for real-time recording
+    if (this.ctx.createMediaStreamDestination) {
+      this.mediaStreamDest = this.ctx.createMediaStreamDestination();
+      this.outputNode.connect(this.mediaStreamDest);
+    }
+
+    // 全部の弦の音を前もって作っておく。最初のタップの音を遅らせないよう、その音を鳴らした後に行う
+    setTimeout(() => this.warmupCache(this.activeTuning.strings), 0);
+
+    this.initialized = true;
   }
 
   private loadReverbImpulse(env: ReverbEnvironment): void {
@@ -428,12 +443,9 @@ class KotoSoundEngine {
     overrideTechnique?: PlayingTechnique
   ): void {
     if (!this.ctx || !this.compressor || this.ctx.state === 'closed') {
-      this.init().then((success) => {
-        if (success) {
-          this.playString(stringId, frequency, velocity, overrideTechnique);
-        }
-      });
-      return;
+      // まだ準備していなければ、ここで準備する（配線はすぐ出来るので、この音もそのまま鳴らす）
+      void this.init();
+      if (!this.ctx || !this.compressor) return;
     }
 
     // Auto-resume AudioContext if suspended (e.g. mobile tab switch or screen sleep)
