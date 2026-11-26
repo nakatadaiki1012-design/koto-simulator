@@ -55,34 +55,34 @@ const VIEW_PRESETS: Record<ViewPreset, { label: string; dir: [number, number, nu
   top: { label: '真上', dir: [0.001, 1, 0], target: [0, 0, 0], span: 200 },
 };
 
-// 「弾く」視点で映す範囲：竜角の外の名札から、いちばん奥の琴柱の少し先まで（長さ方向）と、名札の幅（横方向）
-const PLAY_Z_MIN = Z_HEAD - 20;
-const PLAY_Z_MAX = 44;
-const PLAY_HALF_WIDTH = 27;
+// 「弾く」視点：箏の幅（胴の端まで）を画面の高さいっぱいにして、竜角側の端から見える範囲を映す
+const PLAY_HALF_WIDTH = 14;
+const PLAY_Z_FAR = 44; // いちばん奥の琴柱の少し先（これより先は映さなくてよい）
 
 function presetPose(v: ViewPreset, camera: THREE.PerspectiveCamera) {
   const pr = VIEW_PRESETS[v];
   const vfov = (camera.fov * Math.PI) / 180;
   const hfov = 2 * Math.atan(Math.tan(vfov / 2) * camera.aspect);
   if (v === 'play') {
-    // 横長の画面：箏の長さを横に（竜角が右、一が上）。2Dの横置きと同じ並び
-    // 縦長の画面：箏の長さを縦に（竜角と名札が上、一が左）。2Dの縦置きと同じ並び
-    const portrait = camera.aspect < 1;
-    const len = PLAY_Z_MAX - PLAY_Z_MIN;
-    const tanAlong = Math.tan((portrait ? vfov : hfov) / 2);
-    const tanAcross = Math.tan((portrait ? hfov : vfov) / 2);
-    // まず箏の幅（名札まで）が画面いっぱいになる距離にする
-    let dist = Math.max(55, (PLAY_HALF_WIDTH / tanAcross) * 1.02);
-    // そのとき見える長さ。弾く範囲より長く見えるなら、範囲がちょうど収まる距離まで寄る
-    let visible = 2 * dist * tanAlong;
-    if (visible > len) {
-      dist = Math.max(55, (len / 2 / tanAlong) * 1.02);
-      visible = len;
+    // 向きは画面の縦横にかかわらず、竜角が右・一が上（2Dの横置きと同じ並び）
+    const tanV = Math.tan(vfov / 2);
+    const tanH = Math.tan(hfov / 2);
+    // 画面の下の1割は、視点ボタンのためにあけておく（箏はその上に収める）
+    const halfV = PLAY_HALF_WIDTH / 0.9;
+    let dist = Math.max(14, (halfV / tanV) * 1.02);
+    let visible = 2 * dist * tanH; // 画面の横方向に見える長さ
+    // 右の端に、弦の名前を出す分のすき間をあける
+    let margin = Math.max(1.8, visible * 0.08);
+    const maxLen = PLAY_Z_FAR - (Z_HEAD - margin);
+    if (visible > maxLen) {
+      dist = Math.max(14, (maxLen / 2 / tanH) * 1.02);
+      visible = maxLen;
+      margin = Math.max(1.8, visible * 0.08);
     }
-    // 竜角側（名札）を画面の端にそろえ、そこから見えるところまで映す
-    const target = new THREE.Vector3(0, 5, PLAY_Z_MIN + Math.min(visible, len) / 2);
-    const dir = portrait ? new THREE.Vector3(0, 1, 0.0015) : new THREE.Vector3(0.0015, 1, 0);
-    return { pos: target.clone().addScaledVector(dir.normalize(), dist), target };
+    // 画面の下向き＝奥行き(x)の＋方向。注視点を少し＋にずらすと、箏が画面の上へ寄る
+    const target = new THREE.Vector3(dist * tanV * 0.1, 5, Z_HEAD - margin + visible / 2);
+    const dir = new THREE.Vector3(0.0015, 1, 0).normalize();
+    return { pos: target.clone().addScaledVector(dir, dist), target };
   }
   // 真上と横は箏の長さが画面の横方向、縦長画面では縦方向にも収まるようにする
   const fitH = pr.span / 2 / Math.tan(hfov / 2);
@@ -290,6 +290,9 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
   const tweenRef = useRef<{ from: THREE.Vector3; to: THREE.Vector3; tFrom: THREE.Vector3; tTo: THREE.Vector3; start: number } | null>(null);
   const [view, setView] = useState<ViewPreset>('play');
   const viewRef = useRef<ViewPreset>('play');
+  // 「弾く」視点で弦の名前を出す札（弦の右端のすぐ外と、左の延長線上の画面の端）
+  const nameElsRef = useRef<Record<number, { r: HTMLDivElement | null; l: HTMLDivElement | null }>>({});
+  const viewSizeRef = useRef({ w: 1, h: 1 });
   const userMovedRef = useRef<boolean>(false);
   const [autoRotate, setAutoRotate] = useState<boolean>(false);
   const [webglError, setWebglError] = useState<boolean>(false);
@@ -351,7 +354,7 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
     const controls = new OrbitControls(camera, renderer.domElement);
     controls.enableDamping = true;
     controls.dampingFactor = 0.08;
-    controls.minDistance = 45;
+    controls.minDistance = 12;
     controls.maxDistance = 420;
     controls.maxPolarAngle = Math.PI * 0.49; // 床の下には回り込まない
     controls.enablePan = true;
@@ -483,6 +486,7 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
     const resize = () => {
       const w = mount.clientWidth || 1;
       const h = mount.clientHeight || 1;
+      viewSizeRef.current = { w, h };
       renderer.setSize(w, h, false);
       renderer.domElement.style.width = `${w}px`;
       renderer.domElement.style.height = `${h}px`;
@@ -556,6 +560,91 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
     const d = new THREE.Vector3();
     const e0 = new THREE.Vector3();
     let raf = 0;
+
+    // ---- 「弾く」視点の弦の名前：3Dの位置を画面の位置に直して、文字の札を置く ----
+    const pv = new THREE.Vector3();
+    const toScreen = (x: number, y: number, z: number) => {
+      pv.set(x, y, z).project(camera);
+      const { w, h } = viewSizeRef.current;
+      return { x: ((pv.x + 1) / 2) * w, y: ((1 - pv.y) / 2) * h };
+    };
+    const hideTag = (el: HTMLDivElement | null) => {
+      if (el && el.style.opacity !== '0') el.style.opacity = '0';
+    };
+    const placeNameTags = (now: number, guideId: number | null) => {
+      const parts = stringsRef.current;
+      const show = viewRef.current === 'play';
+      for (const p of parts) p.label.visible = !show; // ほかの視点では3Dの札を使う
+      if (!show || parts.length < 2) {
+        for (const p of parts) {
+          hideTag(nameElsRef.current[p.id]?.r ?? null);
+          hideTag(nameElsRef.current[p.id]?.l ?? null);
+        }
+        return;
+      }
+      const { w, h } = viewSizeRef.current;
+      // 弦と弦の間隔（画面上）から札の大きさを決める
+      const f = parts[0];
+      const lst = parts[parts.length - 1];
+      const s0 = toScreen(f.x, surfaceY(f.x), Z_HEAD);
+      const s1 = toScreen(lst.x, surfaceY(lst.x), Z_HEAD);
+      const spacing = Math.hypot(s1.x - s0.x, s1.y - s0.y) / (parts.length - 1);
+      const size = Math.max(14, Math.min(28, spacing * 0.85));
+      const m = 6 + size / 2;
+      for (const p of parts) {
+        const els = nameElsRef.current[p.id];
+        if (!els) continue;
+        const sy = surfaceY(p.x);
+        // 画面に見えている弦の形にそろえる
+        // 左：竜角 → 琴柱 の線をそのまま延ばした先（画面の端）
+        // 右：竜角 → 弦の端 の向きに、端から少しだけ外
+        const A = toScreen(p.x, sy + RYUKAKU_H, Z_RYUKAKU);
+        const B = toScreen(p.x, sy + JI_H + 0.05, p.jiZ);
+        const E = toScreen(p.x, sy * 0.85, Z_HEAD + 0.4);
+        const len = Math.hypot(B.x - A.x, B.y - A.y);
+        const elen = Math.hypot(E.x - A.x, E.y - A.y);
+        if (len < 1 || elen < 1) {
+          hideTag(els.r);
+          hideTag(els.l);
+          continue;
+        }
+        const dx = (B.x - A.x) / len;
+        const dy = (B.y - A.y) / len;
+        // 竜角→琴柱の線が、画面の内側（少し内寄り）にある範囲 [tmin, tmax]
+        let tmin = -Infinity;
+        let tmax = Infinity;
+        const slab = (e: number, d: number, lo: number, hi: number) => {
+          if (Math.abs(d) < 1e-6) {
+            if (e < lo || e > hi) tmin = Infinity;
+            return;
+          }
+          const t1 = (lo - e) / d;
+          const t2 = (hi - e) / d;
+          tmin = Math.max(tmin, Math.min(t1, t2));
+          tmax = Math.min(tmax, Math.max(t1, t2));
+        };
+        slab(A.x, dx, m, w - m);
+        slab(A.y, dy, m, h - m);
+        const gap = size / 2 + 6;
+        const rx = Math.min(w - m, Math.max(m, E.x + ((E.x - A.x) / elen) * gap));
+        const ry = Math.min(h - m, Math.max(m, E.y + ((E.y - A.y) / elen) * gap));
+        const lx = A.x + dx * tmax;
+        const ly = A.y + dy * tmax;
+        const age = (now - p.pluckedAt) / 1000;
+        const hot = age < 0.5 || p.id === guideId;
+        const put = (el: HTMLDivElement | null, x: number, y: number) => {
+          if (!el) return;
+          el.style.width = el.style.height = `${size}px`;
+          el.style.fontSize = `${size * 0.58}px`;
+          el.style.transform = `translate(${x - size / 2}px, ${y - size / 2}px)`;
+          el.style.opacity = '1';
+          el.dataset.hot = hot ? '1' : '0';
+        };
+        put(els.r, rx, ry);
+        if (tmin <= tmax && Math.hypot(lx - rx, ly - ry) > size * 1.5) put(els.l, lx, ly);
+        else hideTag(els.l);
+      }
+    };
     const tick = () => {
       raf = requestAnimationFrame(tick);
       const now = performance.now();
@@ -605,6 +694,8 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
         const ls = hot ? LABEL_SIZE * 1.18 : LABEL_SIZE;
         p.label.scale.set(ls, ls, 1);
       }
+
+      placeNameTags(now, guideId);
 
       renderer.render(scene, camera);
     };
@@ -726,6 +817,28 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
     <div className="relative w-full h-full rounded-2xl overflow-hidden border border-amber-900/50 shadow-2xl select-none">
       <div ref={mountRef} className="absolute inset-0 touch-none" />
 
+      {/* 「弾く」視点の弦の名前（位置は毎フレーム、弦に合わせて動かす） */}
+      <div className="absolute inset-0 z-[5] pointer-events-none overflow-hidden">
+        {activeTuning.strings.map((sd) => {
+          const text = labelMode === 'kanji' ? sd.kanji : labelMode === 'doremi' ? sd.doremi : sd.westernPitch;
+          const refFor = (side: 'r' | 'l') => (el: HTMLDivElement | null) => {
+            const cur = nameElsRef.current[sd.id] ?? { r: null, l: null };
+            cur[side] = el;
+            nameElsRef.current[sd.id] = cur;
+          };
+          return (
+            <React.Fragment key={sd.id}>
+              <div ref={refFor('r')} className="koto3d-name" style={{ opacity: 0 }}>
+                {text}
+              </div>
+              <div ref={refFor('l')} className="koto3d-name" style={{ opacity: 0 }}>
+                {text}
+              </div>
+            </React.Fragment>
+          );
+        })}
+      </div>
+
       {/* いま発動している特殊奏法 */}
       {currentTechnique !== 'normal' && (
         <div className="absolute top-3 left-1/2 -translate-x-1/2 z-10 pointer-events-none px-3 py-0.5 rounded-full bg-stone-950/85 border border-amber-400/60 text-amber-200 text-xs font-serif-jp font-bold shadow-lg">
@@ -762,7 +875,7 @@ export const Koto3DView: React.FC<Koto3DViewProps> = ({
         </button>
       </div>
 
-      <div className="hidden sm:block absolute left-3 top-3 z-10 pointer-events-none text-[10px] sm:text-[11px] text-stone-400 font-serif-jp bg-stone-950/70 rounded-md px-2 py-1 text-right leading-relaxed">
+      <div className={`${view === 'play' ? 'hidden' : 'hidden sm:block'} absolute left-3 top-3 z-10 pointer-events-none text-[10px] sm:text-[11px] text-stone-400 font-serif-jp bg-stone-950/70 rounded-md px-2 py-1 text-right leading-relaxed`}>
         弦をタップで演奏
         <br className="sm:hidden" />
         <span className="hidden sm:inline">　／　</span>ドラッグで回転・ピンチで拡大
